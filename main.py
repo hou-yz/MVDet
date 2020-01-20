@@ -29,7 +29,7 @@ def main():
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
     parser.add_argument('--epochs', type=int, default=60, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=1e-2, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--lr', type=float, default=1e-1, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--log_interval', type=int, default=20, metavar='N',
@@ -52,10 +52,10 @@ def main():
     if args.dataset == 'wildtrack':
         data_path = os.path.expanduser('~/Data/Wildtrack')
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-        train_trans = T.Compose([T.Resize([360, 640]), T.ToTensor(), normalize, ])
+        train_trans = T.Compose([T.Resize([720, 1280]), T.ToTensor(), normalize, ])
         # test_trans = T.Compose([T.ToTensor(), ])
-        train_set = WildtrackFrame(data_path, train=True, transform=train_trans)
-        test_set = WildtrackFrame(data_path, train=False, transform=train_trans)
+        train_set = WildtrackFrame(data_path, train=True, transform=train_trans, featmap_reduce=4)
+        test_set = WildtrackFrame(data_path, train=False, transform=train_trans, featmap_reduce=4)
     else:
         raise Exception
 
@@ -80,14 +80,14 @@ def main():
 
     # model
     model = MultiviewDetector(train_set).cuda()
-    # model = nn.DataParallel(model)
+    model = nn.DataParallel(model)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 20, 1)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
     #                                                 steps_per_epoch=len(train_loader), epochs=args.epochs)
 
     # loss
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(weight=torch.tensor([20 / np.prod(train_set.featmap_shape), 1])).cuda()
 
     # draw curve
     x_epoch = []

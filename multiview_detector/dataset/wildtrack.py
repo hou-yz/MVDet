@@ -9,7 +9,6 @@ import torch
 from torchvision.transforms import ToTensor
 from multiview_detector.utils.projection import *
 
-UNIT = 1
 intrinsic_camera_matrix_filenames = ['intr_CVLab1.xml', 'intr_CVLab2.xml', 'intr_CVLab3.xml', 'intr_CVLab4.xml',
                                      'intr_IDIAP1.xml', 'intr_IDIAP2.xml', 'intr_IDIAP3.xml']
 extrinsic_camera_matrix_filenames = ['extr_CVLab1.xml', 'extr_CVLab2.xml', 'extr_CVLab3.xml', 'extr_CVLab4.xml',
@@ -17,13 +16,15 @@ extrinsic_camera_matrix_filenames = ['extr_CVLab1.xml', 'extr_CVLab2.xml', 'extr
 
 
 class WildtrackFrame(VisionDataset):
-    def __init__(self, root, train=True, transform=ToTensor(), target_transform=None, reID=False, train_ratio=0.9):
+    def __init__(self, root, train=True, transform=ToTensor(), target_transform=None,
+                 reID=False, featmap_reduce=4, train_ratio=0.9):
         super().__init__(root, transform=transform, target_transform=target_transform)
 
         self.root = root
         self.num_cam, self.num_frame = 7, 2000
-        self.reID = reID
+        self.reID, self.featmap_reduce = reID, featmap_reduce
         self.img_shape, self.worldgrid_shape = [1080, 1920], [480, 1440]  # H,W; N_row,N_col
+        self.featmap_shape = (np.array(self.worldgrid_shape) / self.featmap_reduce).astype(int).tolist()
         if train:
             frame_range = range(0, int(self.num_frame * train_ratio))
         else:
@@ -32,7 +33,6 @@ class WildtrackFrame(VisionDataset):
         self.img_fpaths = {cam: {} for cam in range(self.num_cam)}
         self.img_gt = {}
         self.intrinsic_matrices, self.extrinsic_matrices = {}, {}
-        occupancy_map_shape = np.array([480, 1440], dtype=int)
 
         for camera_folder in sorted(os.listdir(os.path.join(root, 'Image_subsets'))):
             cam = int(camera_folder[-1]) - 1
@@ -50,16 +50,15 @@ class WildtrackFrame(VisionDataset):
                 i_s, j_s, v_s = [], [], []
                 for single_pedestrian in all_pedestrians:
                     x, y = get_worldgrid_from_posid(single_pedestrian['positionID'])
-                    i_s.append(x)
-                    j_s.append(y)
+                    i_s.append(int(x / self.featmap_reduce))
+                    j_s.append(int(y / self.featmap_reduce))
                     v_s.append(single_pedestrian['personID'] + 1 if self.reID else 1)
-                occupancy_map = coo_matrix((v_s, (i_s, j_s)), shape=occupancy_map_shape)
+                occupancy_map = coo_matrix((v_s, (i_s, j_s)), shape=self.featmap_shape)
                 self.img_gt[frame] = occupancy_map
 
-        for cam in range(self.num_cam):
-            intrinsic_matrix, extrinsic_matrix = self.get_intrinsic_extrinsic_matrix(cam)
-            self.intrinsic_matrices[cam] = intrinsic_matrix
-            self.extrinsic_matrices[cam] = extrinsic_matrix
+        self.intrinsic_matrices, self.extrinsic_matrices = zip(
+            *[self.get_intrinsic_extrinsic_matrix(cam) for cam in range(self.num_cam)])
+        pass
 
     def __getitem__(self, index):
         frame = list(self.img_gt.keys())[index]
@@ -72,6 +71,8 @@ class WildtrackFrame(VisionDataset):
             imgs.append(img)
         imgs = torch.stack(imgs)
         gt = torch.from_numpy(self.img_gt[frame].toarray())
+        if self.reID:
+            gt = (gt > 0).int()
         if self.target_transform is not None:
             gt = self.target_transform(gt)
         return imgs, gt

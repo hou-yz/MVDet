@@ -3,22 +3,24 @@ import numpy as np
 import torch
 import torch.nn as nn
 import kornia
-from torchvision.models.vgg import vgg16_bn
+from torchvision.models.vgg import vgg11
+from torchvision.models.alexnet import alexnet
 
 import matplotlib.pyplot as plt
 
 
 class MultiviewDetector(nn.Module):
-    def __init__(self, dataset, featmap_reduce=4):
+    def __init__(self, dataset):
         super().__init__()
-        self.num_cam, self.featmap_reduce = dataset.num_cam, featmap_reduce
-        self.img_shape, self.worldgrid_shape = dataset.img_shape, dataset.worldgrid_shape
-        self.featmap_shape = (np.array(self.worldgrid_shape) / self.featmap_reduce).astype(int).tolist()
+        self.num_cam, self.featmap_reduce = dataset.num_cam, dataset.featmap_reduce
+        self.img_shape, self.worldgrid_shape, self.featmap_shape = \
+            dataset.img_shape, dataset.worldgrid_shape, dataset.featmap_shape
         intrinsic_matrices, extrinsic_matrices = zip(*[dataset.get_intrinsic_extrinsic_matrix(cam)
                                                        for cam in range(dataset.num_cam)])
         self.projection_matrices = self.get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices)
 
-        self.base = vgg16_bn().features
+        self.base = vgg11().features
+        self.base[-1] = nn.Sequential()
         # 2.5cm -> 0.5m: 20x
         self.classifier_head = nn.Sequential(nn.Conv2d(512 * 7, 512, 5, 1, 2), nn.BatchNorm2d(512), nn.ReLU(),
                                              nn.Conv2d(512, 128, 5, 1, 2), nn.BatchNorm2d(128), nn.ReLU(),
@@ -44,7 +46,7 @@ class MultiviewDetector(nn.Module):
 
         world_features = torch.cat(world_features, dim=1)
         detector_result = self.classifier_head(world_features)
-        detector_result = nn.functional.interpolate(detector_result, self.worldgrid_shape, mode='bilinear')
+        detector_result = nn.functional.interpolate(detector_result, self.featmap_shape, mode='bilinear')
         return detector_result
 
     def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices):
