@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="houyz@anu-4">
+    <serverData>
+      <paths name="houyz@anu-4">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/Code/multiview_one_stage" local="$PROJECT_DIR$" />
+          </mappings>
+          <excludedPaths>
+            <excludedPath path="/Code/multiview_one_stage/MNIST" />
+            <excludedPath path="/Code/multiview_one_stage/logs" />
+          </excludedPaths>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>
