@@ -12,6 +12,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as T
 from multiview_detector.dataset.wildtrack import WildtrackFrame
+from multiview_detector.loss.gaussian_mse import GaussianMSE
 from multiview_detector.model.multiviewdetector import MultiviewDetector
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
@@ -29,10 +30,10 @@ def main():
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
     parser.add_argument('--epochs', type=int, default=60, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=1e-1, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--lr', type=float, default=1e-2, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
-    parser.add_argument('--log_interval', type=int, default=20, metavar='N',
+    parser.add_argument('--log_interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--resume', type=str, default=None)
     parser.add_argument('--visualize', action='store_true')
@@ -87,7 +88,7 @@ def main():
     #                                                 steps_per_epoch=len(train_loader), epochs=args.epochs)
 
     # loss
-    criterion = nn.CrossEntropyLoss(weight=torch.tensor([20 / np.prod(train_set.featmap_shape), 1])).cuda()
+    criterion = GaussianMSE(train_set.kernel).cuda()
 
     # draw curve
     x_epoch = []

@@ -1,11 +1,13 @@
 import os
 import json
 import cv2
+from scipy.stats import multivariate_normal
 from PIL import Image
 import xml.etree.ElementTree as ET
 from scipy.sparse import coo_matrix
 from torchvision.datasets import VisionDataset
 import torch
+from torch.nn.functional import conv2d
 from torchvision.transforms import ToTensor
 from multiview_detector.utils.projection import *
 
@@ -16,12 +18,13 @@ extrinsic_camera_matrix_filenames = ['extr_CVLab1.xml', 'extr_CVLab2.xml', 'extr
 
 
 class WildtrackFrame(VisionDataset):
-    def __init__(self, root, train=True, transform=ToTensor(), target_transform=None,
-                 reID=False, featmap_reduce=4, train_ratio=0.9):
+    def __init__(self, root, train=True, transform=ToTensor(), target_transform=ToTensor(),
+                 gaussian=True, reID=False, featmap_reduce=4, train_ratio=0.9):
         super().__init__(root, transform=transform, target_transform=target_transform)
 
         self.root = root
         self.num_cam, self.num_frame = 7, 2000
+        self.gaussian, sigma, kernel_size = gaussian, 10 / featmap_reduce, 5
         self.reID, self.featmap_reduce = reID, featmap_reduce
         self.img_shape, self.worldgrid_shape = [1080, 1920], [480, 1440]  # H,W; N_row,N_col
         self.featmap_shape = (np.array(self.worldgrid_shape) / self.featmap_reduce).astype(int).tolist()
@@ -58,6 +61,11 @@ class WildtrackFrame(VisionDataset):
 
         self.intrinsic_matrices, self.extrinsic_matrices = zip(
             *[self.get_intrinsic_extrinsic_matrix(cam) for cam in range(self.num_cam)])
+
+        x, y = np.mgrid[-kernel_size:kernel_size + 1, -kernel_size:kernel_size + 1]
+        pos = np.stack([x, y], axis=2)
+        self.kernel = multivariate_normal.pdf(pos, [0, 0], np.identity(2) * sigma)
+        self.kernel = self.kernel / self.kernel.max()
         pass
 
     def __getitem__(self, index):
@@ -70,7 +78,7 @@ class WildtrackFrame(VisionDataset):
                 img = self.transform(img)
             imgs.append(img)
         imgs = torch.stack(imgs)
-        gt = torch.from_numpy(self.img_gt[frame].toarray())
+        gt = self.img_gt[frame].toarray()
         if self.reID:
             gt = (gt > 0).int()
         if self.target_transform is not None:
@@ -110,34 +118,34 @@ class WildtrackFrame(VisionDataset):
 
 
 def test():
-    import matplotlib.pyplot as plt
-
     dataset = WildtrackFrame(os.path.expanduser('~/Data/Wildtrack'))
-    intrinsic_matrices, extrinsic_matrices = zip(*[dataset.get_intrinsic_extrinsic_matrix(cam)
-                                                   for cam in range(dataset.num_cam)])
-    # test projection
-    world_grid_maps = []
-    xx, yy = np.meshgrid(np.arange(0, 1920, 20), np.arange(0, 1080, 20))
-    H, W = xx.shape
-    image_coords = np.stack([xx, yy], axis=2).reshape([-1, 2])
-    for cam in range(7):
-        world_grids = get_worldgrid_from_imagecoord(image_coords.transpose(), intrinsic_matrices[cam],
-                                                    extrinsic_matrices[cam]).transpose().reshape([H, W, 2])
-        world_grid_map = np.zeros([480, 1440])
-        for i in range(H):
-            for j in range(W):
-                x, y = world_grids[i, j]
-                if x in range(480) and y in range(1440):
-                    world_grid_map[int(x), int(y)] += 1
-        world_grid_map = world_grid_map != 0
-        plt.imshow(world_grid_map)
-        plt.show()
-        world_grid_maps.append(world_grid_map)
-        pass
-    plt.imshow(np.sum(np.stack(world_grid_maps), axis=0))
-    plt.show()
+    # # test projection
+    # intrinsic_matrices, extrinsic_matrices = zip(*[dataset.get_intrinsic_extrinsic_matrix(cam)
+    #                                                for cam in range(dataset.num_cam)])
+    # world_grid_maps = []
+    # xx, yy = np.meshgrid(np.arange(0, 1920, 20), np.arange(0, 1080, 20))
+    # H, W = xx.shape
+    # image_coords = np.stack([xx, yy], axis=2).reshape([-1, 2])
+    # import matplotlib.pyplot as plt
+    # for cam in range(7):
+    #     world_grids = get_worldgrid_from_imagecoord(image_coords.transpose(), intrinsic_matrices[cam],
+    #                                                 extrinsic_matrices[cam]).transpose().reshape([H, W, 2])
+    #     world_grid_map = np.zeros([480, 1440])
+    #     for i in range(H):
+    #         for j in range(W):
+    #             x, y = world_grids[i, j]
+    #             if x in range(480) and y in range(1440):
+    #                 world_grid_map[int(x), int(y)] += 1
+    #     world_grid_map = world_grid_map != 0
+    #     plt.imshow(world_grid_map)
+    #     plt.show()
+    #     world_grid_maps.append(world_grid_map)
+    #     pass
+    # plt.imshow(np.sum(np.stack(world_grid_maps), axis=0))
+    # plt.show()
     pass
     imgs, gt = dataset.__getitem__(0)
+    pass
 
 
 if __name__ == '__main__':

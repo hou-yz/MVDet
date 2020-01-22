@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import kornia
-from torchvision.models.vgg import vgg11
+from torchvision.models.vgg import vgg11, vgg16_bn
 from torchvision.models.alexnet import alexnet
 
 import matplotlib.pyplot as plt
@@ -13,8 +13,7 @@ class MultiviewDetector(nn.Module):
     def __init__(self, dataset):
         super().__init__()
         self.num_cam, self.featmap_reduce = dataset.num_cam, dataset.featmap_reduce
-        self.img_shape, self.worldgrid_shape, self.featmap_shape = \
-            dataset.img_shape, dataset.worldgrid_shape, dataset.featmap_shape
+        self.img_shape, self.featmap_shape = dataset.img_shape, dataset.featmap_shape
         intrinsic_matrices, extrinsic_matrices = zip(*[dataset.get_intrinsic_extrinsic_matrix(cam)
                                                        for cam in range(dataset.num_cam)])
         self.projection_matrices = self.get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices)
@@ -22,13 +21,17 @@ class MultiviewDetector(nn.Module):
         self.base = vgg11().features
         self.base[-1] = nn.Sequential()
         # 2.5cm -> 0.5m: 20x
-        self.classifier_head = nn.Sequential(nn.Conv2d(512 * 7, 512, 5, 1, 2), nn.BatchNorm2d(512), nn.ReLU(),
-                                             nn.Conv2d(512, 128, 5, 1, 2), nn.BatchNorm2d(128), nn.ReLU(),
-                                             nn.Conv2d(128, 64, 5, 1, 2), nn.BatchNorm2d(64), nn.ReLU(),
-                                             nn.Conv2d(64, 2, 1, 1, bias=False))
+        self.classifier_head = nn.Sequential(nn.Conv2d(512 * 7 + 2, 512, 5, 1, 2), nn.ReLU(),
+                                             nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
+                                             nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
+                                             nn.Conv2d(512, 1, 1, 1, bias=False))
+
+        self.coord_map = self.create_coord_map(self.featmap_shape + [1])
+        pass
 
     def forward(self, imgs, visualize=False):
-        assert imgs.shape[1] == self.num_cam
+        B, N, C, H, W = imgs.shape
+        assert N == self.num_cam
         world_features = []
         for cam in range(self.num_cam):
             img_feature = self.base(imgs[:, cam])
@@ -37,14 +40,14 @@ class MultiviewDetector(nn.Module):
             featmap_zoom_mat = np.diag(np.append(np.ones([2]) / self.featmap_reduce, [1]))
             proj_mat = torch.from_numpy(
                 np.matmul(featmap_zoom_mat, np.matmul(self.projection_matrices[cam], img_zoom_mat))).repeat(
-                [imgs.shape[0], 1, 1]).float().to(img_feature.device)
+                [B, 1, 1]).float().to(img_feature.device)
             world_feature = kornia.warp_perspective(img_feature, proj_mat, self.featmap_shape)
             if visualize:
                 plt.imshow(world_feature[0, 0].detach().numpy() != 0)
                 plt.show()
             world_features.append(world_feature)
 
-        world_features = torch.cat(world_features, dim=1)
+        world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to(imgs.device)], dim=1)
         detector_result = self.classifier_head(world_features)
         detector_result = nn.functional.interpolate(detector_result, self.featmap_shape, mode='bilinear')
         return detector_result
@@ -62,6 +65,17 @@ class MultiviewDetector(nn.Module):
             projection_matrices[cam] = np.matmul(permutation_mat, imgcoord2worldgrid_mat)
             pass
         return projection_matrices
+
+    def create_coord_map(self, img_size, with_r=False):
+        H, W, C = img_size
+        grid_x, grid_y = np.meshgrid(np.arange(W), np.arange(H))
+        grid_x = torch.from_numpy(grid_x / (W - 1) * 2 - 1).float()
+        grid_y = torch.from_numpy(grid_y / (H - 1) * 2 - 1).float()
+        ret = torch.stack([grid_x, grid_y], dim=0).unsqueeze(0)
+        if with_r:
+            rr = torch.sqrt(torch.pow(grid_x, 2) + torch.pow(grid_y, 2)).view([1, 1, H, W])
+            ret = torch.cat([ret, rr], dim=1)
+        return ret
 
 
 def test():
