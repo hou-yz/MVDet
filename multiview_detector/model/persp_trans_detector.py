@@ -9,7 +9,7 @@ from torchvision.models.alexnet import alexnet
 import matplotlib.pyplot as plt
 
 
-class MultiviewDetector(nn.Module):
+class PerspTransDetector(nn.Module):
     def __init__(self, dataset):
         super().__init__()
         self.num_cam, self.featmap_reduce = dataset.num_cam, dataset.featmap_reduce
@@ -24,7 +24,7 @@ class MultiviewDetector(nn.Module):
         self.classifier_head = nn.Sequential(nn.Conv2d(512 * 7 + 2, 512, 5, 1, 2), nn.ReLU(),
                                              nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
                                              nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
-                                             nn.Conv2d(512, 1, 1, 1, bias=False))
+                                             nn.Conv2d(512, 1, 1, 1, bias=False), nn.Sigmoid())
 
         self.coord_map = self.create_coord_map(self.featmap_shape + [1])
         pass
@@ -79,7 +79,7 @@ class MultiviewDetector(nn.Module):
 
 
 def test():
-    from multiview_detector.dataset.wildtrack import WildtrackFrame
+    from multiview_detector.dataset.wildtrack_frame import WildtrackFrame
     import torchvision.transforms as T
     from torch.utils.data import DataLoader
 
@@ -94,7 +94,7 @@ def test():
     dataset = WildtrackFrame(os.path.expanduser('~/Data/Wildtrack'), transform=transform)
     dataloader = DataLoader(dataset, 1, True, num_workers=0)
     imgs, gt = next(iter(dataloader))
-    model = MultiviewDetector(dataset)
+    model = PerspTransDetector(dataset)
     res = model(imgs, visualize=True)
     # # test without calling the model forward
     # imgs = torch.ones([1, 1, 1080, 1920]).float()
