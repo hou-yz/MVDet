@@ -96,7 +96,6 @@ class PerspectiveTrainer(BaseTrainer):
         return losses / len(test_loader), precision_s.avg * 100
 
 
-
 class BBOXTrainer(BaseTrainer):
     def __init__(self, model, criterion):
         super(BaseTrainer, self).__init__()
@@ -139,11 +138,12 @@ class BBOXTrainer(BaseTrainer):
 
         return losses / len(data_loader), correct / (correct + miss)
 
-    def test(self, test_loader):
+    def test(self, test_loader, log_interval=100, ):
         self.model.eval()
         losses = 0
         correct = 0
         miss = 0
+        t0 = time.time()
         for batch_idx, (data, target) in enumerate(test_loader):
             data, target = data.cuda(), target.cuda()
             with torch.no_grad():
@@ -153,6 +153,12 @@ class BBOXTrainer(BaseTrainer):
             miss += target.numel() - pred.eq(target).sum().item()
             loss = self.criterion(output, target)
             losses += loss.item()
+            if (batch_idx + 1) % log_interval == 0:
+                # print(cyclic_scheduler.last_epoch, optimizer.param_groups[0]['lr'])
+                t1 = time.time()
+                t_epoch = t1 - t0
+                print('Test Batch:{}, \tLoss: {:.6f}, Prec: {:.1f}%, Time: {:.3f}'.format(
+                    (batch_idx + 1), losses / (batch_idx + 1), 100. * correct / (correct + miss), t_epoch))
 
         print('Test, Loss: {:.6f}, Prec: {:.1f}%'.format(losses / (len(test_loader) + 1),
                                                          100. * correct / (correct + miss)))

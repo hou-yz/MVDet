@@ -55,7 +55,7 @@ def main():
         train_trans = T.Compose([T.Resize([256, 128]), T.ToTensor(), normalize, ])
         # test_trans = T.Compose([T.ToTensor(), ])
         train_set = WildtrackBBOX(data_path, train=True, transform=train_trans)
-        test_set = WildtrackBBOX(data_path, train=False, transform=train_trans)
+        test_set = WildtrackBBOX(data_path, train=False, transform=train_trans,train_ratio=0.9975)
     else:
         raise Exception
 
