@@ -22,9 +22,9 @@ def main():
     # settings
     parser = argparse.ArgumentParser(description='Multiview detector')
     parser.add_argument('--reID', action='store_true')
-    parser.add_argument('--label_smooth', type=float, default=0.0)
+    parser.add_argument('--cls_thres', type=float, default=0.4)
     parser.add_argument('--soften', type=float, default=1, help='soften coefficient for softmax')
-    parser.add_argument('-d', '--dataset', type=str, default='wildtrack', choices=['wildtrack'])
+    parser.add_argument('-d', '--dataset', type=str, default='wildtrack_bbox', choices=['wildtrack_bbox'])
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 1)')
@@ -49,13 +49,14 @@ def main():
         torch.backends.cudnn.benchmark = True
 
     # dataset
-    if args.dataset == 'wildtrack':
-        data_path = os.path.expanduser('~/Data/Wildtrack')
+    if args.dataset == 'wildtrack_bbox':
+        data_path = os.path.expanduser('~/Data/wildtrack_bbox')
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         train_trans = T.Compose([T.Resize([256, 128]), T.ToTensor(), normalize, ])
-        # test_trans = T.Compose([T.ToTensor(), ])
-        train_set = WildtrackBBOX(data_path, train=True, transform=train_trans)
-        test_set = WildtrackBBOX(data_path, train=False, transform=train_trans,train_ratio=0.9975)
+        test_trans = T.Compose([T.Resize([256, 128]), T.ToTensor(), normalize, ])
+        train_set = WildtrackBBOX(data_path, split='train', transform=train_trans)
+        val_set = WildtrackBBOX(data_path, split='val', transform=test_trans)  # ,train_ratio=0.9975
+        test_set = WildtrackBBOX(data_path, split='val', transform=test_trans)  # ,train_ratio=0.9975
     else:
         raise Exception
 
@@ -63,10 +64,12 @@ def main():
 
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True)
+    val_loader = torch.utils.data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False,
+                                             num_workers=args.num_workers, pin_memory=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
                                               num_workers=args.num_workers, pin_memory=True)
 
-    logdir = f'logs/{args.dataset}/bbox' + datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S')
+    logdir = f'logs/{args.dataset}/' + datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S')
     if args.resume is None:
         os.makedirs(logdir, exist_ok=True)
         copy_tree('./multiview_detector', logdir + '/scripts/multiview_detector')
@@ -96,7 +99,7 @@ def main():
     og_test_loss_s = []
     og_test_prec_s = []
 
-    trainer = BBOXTrainer(model, criterion)
+    trainer = BBOXTrainer(model, criterion, args.cls_thres)
 
     # learn
     if args.resume is None:
@@ -107,7 +110,7 @@ def main():
             print('Training...')
             train_loss, train_prec = trainer.train(epoch, train_loader, optimizer, args.log_interval, scheduler)
             print('Testing...')
-            test_loss, test_prec = trainer.test(test_loader)
+            test_loss, test_prec, _ = trainer.test(val_loader)
 
             x_epoch.append(epoch)
             train_loss_s.append(train_loss)
@@ -123,8 +126,9 @@ def main():
         resume_fname = resume_dir + '/MultiviewDetector.pth'
         model.load_state_dict(torch.load(resume_fname))
         model.eval()
-        print('Test loaded model...')
-        trainer.test(test_loader)
+    print('Test loaded model...')
+    test_loss, test_prec, result = trainer.test(test_loader, save=True)
+    pass
 
 
 if __name__ == '__main__':

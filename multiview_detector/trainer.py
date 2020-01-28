@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from .utils.meters import AverageMeter
+from .utils.nms import nms
 
 
 class BaseTrainer(object):
@@ -97,10 +98,11 @@ class PerspectiveTrainer(BaseTrainer):
 
 
 class BBOXTrainer(BaseTrainer):
-    def __init__(self, model, criterion):
+    def __init__(self, model, criterion, cls_thres):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
+        self.cls_thres = cls_thres
 
     def train(self, epoch, data_loader, optimizer, log_interval=100, cyclic_scheduler=None):
         self.model.train()
@@ -108,7 +110,7 @@ class BBOXTrainer(BaseTrainer):
         correct = 0
         miss = 0
         t0 = time.time()
-        for batch_idx, (data, target) in enumerate(data_loader):
+        for batch_idx, (data, target, _) in enumerate(data_loader):
             data, target = data.cuda(), target.cuda()
             optimizer.zero_grad()
             output = self.model(data)
@@ -138,21 +140,25 @@ class BBOXTrainer(BaseTrainer):
 
         return losses / len(data_loader), correct / (correct + miss)
 
-    def test(self, test_loader, log_interval=100, ):
+    def test(self, test_loader, log_interval=100, save=False):
         self.model.eval()
         losses = 0
         correct = 0
         miss = 0
+        res_by_frame_dict = {}
         t0 = time.time()
-        for batch_idx, (data, target) in enumerate(test_loader):
+        for batch_idx, (data, target, (frame, pid, grid_x, grid_y)) in enumerate(test_loader):
             data, target = data.cuda(), target.cuda()
             with torch.no_grad():
                 output = self.model(data)
+                output = F.softmax(output, dim=1)
             pred = torch.argmax(output, 1)
             correct += pred.eq(target).sum().item()
             miss += target.numel() - pred.eq(target).sum().item()
             loss = self.criterion(output, target)
             losses += loss.item()
+            if save:
+                self.append_result(output, frame, grid_x, grid_y, res_by_frame_dict)
             if (batch_idx + 1) % log_interval == 0:
                 # print(cyclic_scheduler.last_epoch, optimizer.param_groups[0]['lr'])
                 t1 = time.time()
@@ -160,7 +166,31 @@ class BBOXTrainer(BaseTrainer):
                 print('Test Batch:{}, \tLoss: {:.6f}, Prec: {:.1f}%, Time: {:.3f}'.format(
                     (batch_idx + 1), losses / (batch_idx + 1), 100. * correct / (correct + miss), t_epoch))
 
-        print('Test, Loss: {:.6f}, Prec: {:.1f}%'.format(losses / (len(test_loader) + 1),
-                                                         100. * correct / (correct + miss)))
+        t1 = time.time()
+        t_epoch = t1 - t0
+        print('Test, Batch:{}, Loss: {:.6f}, Prec: {:.1f}%, Time: {:.3f}'.format(
+            len(test_loader), losses / (len(test_loader) + 1), 100. * correct / (correct + miss), t_epoch))
 
-        return losses / len(test_loader), correct / (correct + miss)
+        for frame in res_by_frame_dict.keys():
+            res = res_by_frame_dict[frame]
+            scores = torch.tensor(res['scores'])
+            positions = torch.stack([torch.tensor(res['x_s']), torch.tensor(res['y_s'])], dim=1).float()
+            ids, count = nms(positions, scores, )
+            del res['x_s'], res['y_s']
+            res['scores'] = scores[ids[:count]]
+            res['grids'] = positions[ids[:count]]
+            res_by_frame_dict[frame] = res
+
+        return losses / len(test_loader), correct / (correct + miss), res_by_frame_dict
+
+    def append_result(self, output_s, frame_s, x_s, y_s, frame_res_dict):
+        for i in range(len(frame_s)):
+            output, frame, x, y = output_s[i, 1].item(), frame_s[i].item(), x_s[i].item(), y_s[i].item()
+            if output < self.cls_thres:
+                continue
+            cur_frame_dict = frame_res_dict[frame] if frame in frame_res_dict else {'scores': [], 'x_s': [], 'y_s': []}
+            cur_frame_dict['scores'].append(output)
+            cur_frame_dict['x_s'].append(x)
+            cur_frame_dict['y_s'].append(y)
+            frame_res_dict[frame] = cur_frame_dict
+        pass
