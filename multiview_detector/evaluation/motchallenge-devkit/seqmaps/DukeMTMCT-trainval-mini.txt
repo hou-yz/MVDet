@@ -1,0 +1,9 @@
+name
+cam1_trainval_mini
+cam2_trainval_mini
+cam3_trainval_mini
+cam4_trainval_mini
+cam5_trainval_mini
+cam6_trainval_mini
+cam7_trainval_mini
+cam8_trainval_mini

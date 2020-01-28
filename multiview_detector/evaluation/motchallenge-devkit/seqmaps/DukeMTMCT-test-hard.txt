@@ -1,0 +1,9 @@
+name
+cam1_test_hard
+cam2_test_hard
+cam3_test_hard
+cam4_test_hard
+cam5_test_hard
+cam6_test_hard
+cam7_test_hard
+cam8_test_hard
