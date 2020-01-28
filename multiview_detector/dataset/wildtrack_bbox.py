@@ -32,33 +32,32 @@ class WildtrackBBOX(VisionDataset):
             f'./data/WildtrackBBOX/{self.downscaled_grid_shape[0]}_{self.downscaled_grid_shape[1]}',
             'train' if self.split == 'train' else 'test')
         if not os.path.exists(self.fpath_header) or force_download:
-            self.download(self.fpath_header, train_ratio)
+            self.download(train_ratio)
+
+        self.gt_fpath = './data/WildtrackBBOX/gt.txt'
+        if not os.path.exists(self.gt_fpath) or force_download:
+            self.prepare_gt()
 
         self.fpath_by_index = []
-        if self.split == 'val':
-            frame_folder = 'frame1800'
+        frame_folders = ['frame1800', 'frame1805'] if self.split == 'val' else sorted(os.listdir(self.fpath_header))
+        for frame_folder in frame_folders:
             for pos_folder in sorted(os.listdir(os.path.join(self.fpath_header, frame_folder))):
                 self.fpath_by_index.append(os.path.join(frame_folder, pos_folder))
-        else:
-            for frame_folder in sorted(os.listdir(self.fpath_header)):
-                for pos_folder in sorted(os.listdir(os.path.join(self.fpath_header, frame_folder))):
-                    self.fpath_by_index.append(os.path.join(frame_folder, pos_folder))
 
     def prepare_gt(self):
         og_gt = []
-        quantized_gt = []
         for fname in sorted(os.listdir(os.path.join(self.root, 'annotations_positions'))):
             frame = int(fname.split('.')[0])
             with open(os.path.join(self.root, 'annotations_positions', fname)) as json_file:
                 all_pedestrians = json.load(json_file)
             for single_pedestrian in all_pedestrians:
+                grid_x, grid_y = get_worldgrid_from_posid(single_pedestrian['positionID'])
+                og_gt.append(np.array([frame, grid_x, grid_y]))
+        og_gt = np.stack(og_gt, axis=0)
+        os.makedirs(os.path.dirname(self.gt_fpath), exist_ok=True)
+        np.savetxt(self.gt_fpath, og_gt, '%d')
 
-                quantized_pos = pos_quantization(single_pedestrian['positionID'], self.downscale)
-
-
-
-
-    def download(self, fpath, train_ratio):
+    def download(self, train_ratio):
         if self.split == 'train':
             frame_range = range(0, int(self.num_frame * train_ratio))
         else:
@@ -125,12 +124,13 @@ class WildtrackBBOX(VisionDataset):
 
         bbox_by_pos_cam = read_pom(os.path.join(self.root, 'rectangles.pom'))
 
-        os.makedirs(fpath, exist_ok=True)
+        os.makedirs(self.fpath_header, exist_ok=True)
         for index in tqdm(range(len(all_frame_pos_by_index))):
             frame, pos, pid = all_frame_pos_by_index[index]['frame'], \
                               all_frame_pos_by_index[index]['positionID'], \
                               all_frame_pos_by_index[index]['personID']
-            os.makedirs(os.path.join(fpath, 'frame{:04d}/pos{:06d}_pid{:03d}'.format(frame, pos, pid)), exist_ok=True)
+            os.makedirs(os.path.join(self.fpath_header, 'frame{:04d}/pos{:06d}_pid{:03d}'.format(frame, pos, pid)),
+                        exist_ok=True)
             for cam in range(self.num_cam):
                 if bbox_by_pos_cam[pos][cam] is not None:
                     img_fpath = img_fpaths[cam][frame]
@@ -200,7 +200,7 @@ def pos_reduced_to_og(reduced_pos, downscale, reduced_grid_shape):
 
 def test():
     # read_pom(os.path.expanduser('~/Data/Wildtrack/rectangles.pom'))
-    dataset = WildtrackBBOX(os.path.expanduser('~/Data/Wildtrack'), split='test', force_download=True)  #
+    dataset = WildtrackBBOX(os.path.expanduser('~/Data/Wildtrack'), split='test', )  # force_download=True
     imgs, gt, _ = dataset.__getitem__(1, True)
     pass
 

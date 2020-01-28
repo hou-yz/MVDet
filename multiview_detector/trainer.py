@@ -140,12 +140,12 @@ class BBOXTrainer(BaseTrainer):
 
         return losses / len(data_loader), correct / (correct + miss)
 
-    def test(self, test_loader, log_interval=100, save=False):
+    def test(self, test_loader, log_interval=100, res_fpath=None):
         self.model.eval()
         losses = 0
         correct = 0
         miss = 0
-        res_by_frame_dict = {}
+        all_res_list = []
         t0 = time.time()
         for batch_idx, (data, target, (frame, pid, grid_x, grid_y)) in enumerate(test_loader):
             data, target = data.cuda(), target.cuda()
@@ -157,8 +157,10 @@ class BBOXTrainer(BaseTrainer):
             miss += target.numel() - pred.eq(target).sum().item()
             loss = self.criterion(output, target)
             losses += loss.item()
-            if save:
-                self.append_result(output, frame, grid_x, grid_y, res_by_frame_dict)
+            if res_fpath is not None:
+                indices = output[:, 1] > self.cls_thres
+                all_res_list.append(torch.stack([frame[indices].float(), grid_x[indices].float(),
+                                                 grid_y[indices].float(), output[indices, 1].cpu()], dim=1))
             if (batch_idx + 1) % log_interval == 0:
                 # print(cyclic_scheduler.last_epoch, optimizer.param_groups[0]['lr'])
                 t1 = time.time()
@@ -171,17 +173,18 @@ class BBOXTrainer(BaseTrainer):
         print('Test, Batch:{}, Loss: {:.6f}, Prec: {:.1f}%, Time: {:.3f}'.format(
             len(test_loader), losses / (len(test_loader) + 1), 100. * correct / (correct + miss), t_epoch))
 
-        for frame in res_by_frame_dict.keys():
-            res = res_by_frame_dict[frame]
-            scores = torch.tensor(res['scores'])
-            positions = torch.stack([torch.tensor(res['x_s']), torch.tensor(res['y_s'])], dim=1).float()
-            ids, count = nms(positions, scores, )
-            del res['x_s'], res['y_s']
-            res['scores'] = scores[ids[:count]]
-            res['grids'] = positions[ids[:count]]
-            res_by_frame_dict[frame] = res
+        if res_fpath is not None:
+            all_res_list = torch.cat(all_res_list, dim=0)
+            res_list = []
+            for frame in np.unique(all_res_list[:, 0]):
+                res = all_res_list[all_res_list[:, 0] == frame, :]
+                positions, scores = res[:, 1:3], res[:, 3]
+                ids, count = nms(positions, scores, )
+                res_list.append(torch.cat([torch.ones([count, 1]) * frame, positions[ids[:count], :]], dim=1))
+            res_list = torch.cat(res_list, dim=0).numpy()
+            np.savetxt(res_fpath, res_list, '%d')
 
-        return losses / len(test_loader), correct / (correct + miss), res_by_frame_dict
+        return losses / len(test_loader), correct / (correct + miss)
 
     def append_result(self, output_s, frame_s, x_s, y_s, frame_res_dict):
         for i in range(len(frame_s)):

@@ -16,6 +16,7 @@ from multiview_detector.model.bbox_classifier import BBOXClassifier
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
 from multiview_detector.trainer import BBOXTrainer
+from multiview_detector.evaluation.evaluate import matlab_eval
 
 
 def main():
@@ -25,6 +26,7 @@ def main():
     parser.add_argument('--cls_thres', type=float, default=0.4)
     parser.add_argument('--soften', type=float, default=1, help='soften coefficient for softmax')
     parser.add_argument('-d', '--dataset', type=str, default='wildtrack_bbox', choices=['wildtrack_bbox'])
+    parser.add_argument('--test_type', type=str, default='test', choices=['val', 'test'])
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 1)')
@@ -56,7 +58,7 @@ def main():
         test_trans = T.Compose([T.Resize([256, 128]), T.ToTensor(), normalize, ])
         train_set = WildtrackBBOX(data_path, split='train', transform=train_trans)
         val_set = WildtrackBBOX(data_path, split='val', transform=test_trans)  # ,train_ratio=0.9975
-        test_set = WildtrackBBOX(data_path, split='val', transform=test_trans)  # ,train_ratio=0.9975
+        test_set = WildtrackBBOX(data_path, split=args.test_type, transform=test_trans)  # ,train_ratio=0.9975
     else:
         raise Exception
 
@@ -69,7 +71,8 @@ def main():
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
                                               num_workers=args.num_workers, pin_memory=True)
 
-    logdir = f'logs/{args.dataset}/' + datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S')
+    logdir = f'logs/{args.dataset}/' + datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S') \
+        if not args.resume else f'logs/{args.dataset}/{args.resume}'
     if args.resume is None:
         os.makedirs(logdir, exist_ok=True)
         copy_tree('./multiview_detector', logdir + '/scripts/multiview_detector')
@@ -110,7 +113,7 @@ def main():
             print('Training...')
             train_loss, train_prec = trainer.train(epoch, train_loader, optimizer, args.log_interval, scheduler)
             print('Testing...')
-            test_loss, test_prec, _ = trainer.test(val_loader)
+            test_loss, test_prec = trainer.test(val_loader)
 
             x_epoch.append(epoch)
             train_loss_s.append(train_loss)
@@ -127,7 +130,8 @@ def main():
         model.load_state_dict(torch.load(resume_fname))
         model.eval()
     print('Test loaded model...')
-    test_loss, test_prec, result = trainer.test(test_loader, save=True)
+    trainer.test(test_loader, res_fpath=os.path.join(logdir, f'{args.test_type}.txt'))
+    matlab_eval(os.path.abspath(os.path.join(logdir, f'{args.test_type}.txt')), os.path.abspath(test_set.gt_fpath))
     pass
 
 

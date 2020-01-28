@@ -4,7 +4,7 @@ import torch
 # Original author: Francisco Massa:
 # https://github.com/fmassa/object-detection.torch
 # Ported to PyTorch by Max deGroot (02/01/2017)
-def nms(points, scores, dist_thres=50 / 2.5, top_k=100):
+def nms(points, scores, dist_thres=50 / 2.5, top_k=50):
     """Apply non-maximum suppression at test time to avoid detecting too many
     overlapping bounding boxes for a given object.
     Args:

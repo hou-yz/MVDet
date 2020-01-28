@@ -32,20 +32,12 @@ function [metrics, metricsInfo, additionalInfo]=CLEAR_MOD_HUN(gt,det,options)
 % default options: 2D
 if nargin<3
     options.eval3d=0;   % only bounding box overlap
-    options.td=.5;      % threshold 50%
+    options.td=50/2.5;  % threshold as distance
 end
 
-if ~isfield(options,'td')
-    if options.eval3d
-        options.td=1000;
-        error('not implemented');
-    else
-        options.td=0.5;
-    end
-end
 
 td=options.td;
-radius=5;
+
 % if X,Y not existent, assume 2D
 %  if ~isfield(gtInfo,'X'), gtInfo.X=gtInfo.Xi; end
 %  if ~isfield(gtInfo,'Y'), gtInfo.Y=gtInfo.Yi; end
@@ -113,12 +105,11 @@ fp=zeros(1,F);  % false positives
 m=zeros(1,F);   % misses = false negatives
 g=zeros(1,F);
 d=zeros(F,Ngt);  % all distances;
-dis_r=Inf*ones(F,Ngt);  % all overlaps
+distances=Inf*ones(F,Ngt);  % all overlaps
 
 %  matched=@matched2d;
 %  if options.eval3d, matched=@matched3d; end
 
-%  alltracked=zeros(F,Ngt);
 allfalsepos=zeros(F,N);
 
 for t=1:F
@@ -148,6 +139,8 @@ for t=1:F
     GTsInFrame = find(gt(:,1)==t);
     DetsInFrame = find(det(:,1)==t);
     
+
+
     % reshape to ensure horizontal vector in empty case
     DetsInFrame=reshape(DetsInFrame,1,length(DetsInFrame));
     GTsInFrame=reshape(GTsInFrame,1,length(GTsInFrame));
@@ -181,26 +174,18 @@ for t=1:F
     
     else
         if ~isempty(GTsInFrame) && ~isempty(DetsInFrame)
-            allisects=ones(Ngtt,Nt);        maxisect=Inf;
-            dis=ones(Ngtt,Nt);
+            dist=inf*ones(Ngtt,Nt);
 
             for o=1:Ngtt
 				GT=gt(GTsInFrame(o),[3:4]);
                 for e=1:Nt
 					E=det(DetsInFrame(e),[3:4]);
-                    allisects(o,e)=getDistance(GT(1),GT(2),E(1),E(2));
-                    dis(o,e)=getDistance(GT(1),GT(2),E(1),E(2));
-                    if allisects(o,e) <= radius
-                        allisects(o,e) = 1;
-                    else
-                        allisects(o,e) = 0;
-                    end
+                    dist(o,e)=getDistance(GT(1),GT(2),E(1),E(2));
                 end
             end
 
 
-            tmpai=allisects; 
-            tmpai=1-tmpai;
+            tmpai=dist; 
             tmpai(tmpai>td)=Inf;
 
             % do Hungarian matching only if there is anything to match
@@ -234,7 +219,6 @@ for t=1:F
         falsepositives=setdiff(alldetections,mappedDets);
     end
     
-%    alltracked(t,:)=M(t,:);
 %     allfalsepos(t,1:length(falsepositives))=falsepositives;
     allfalsepos(t,falsepositives)=falsepositives;
     
@@ -251,13 +235,8 @@ for t=1:F
 			stX = det(DetsInFrame(eid), 3);
 			stY = det(DetsInFrame(eid), 4);
             
-            dis_r(t,ct)=getDistance(gtX, gtY, stX, stY);
+            distances(t,ct)=getDistance(gtX, gtY, stX, stY);
 
-            if dis_r(t,ct) <= radius
-                dis_r(t,ct) = 1-tanh(dis_r(t,ct)*10);
-            else
-                dis_r(t,ct) = 0;
-            end
         end
     end
     
@@ -276,7 +255,7 @@ truepositives=sum(c);
 if options.eval3d
     MODP=(1-sum(sum(d))/sum(c)/td) * 100; % avg distance to [0,100]
 else
-    MODP=sum(dis_r(dis_r>=td & dis_r<Inf))/sum(c) * 100; % avg ol
+    MODP=sum(1-distances(distances<td)/td)/sum(c) * 100; % avg ol
 end
 if isnan(MODP), MODP=0; end % force to 0 if no matches found
 
@@ -288,7 +267,6 @@ GT=sum(g);
  
 metrics=[recall, precision, FAR, GT, truepositives, falsepositives, missed, MODA, MODP];
 
-%additionalInfo.alltracked=alltracked;
 additionalInfo.allfalsepos=allfalsepos;
 
 additionalInfo.m = m;
@@ -297,7 +275,7 @@ additionalInfo.g = g;
 additionalInfo.c = c;
 additionalInfo.Fgt = Fgt;
 additionalInfo.Ngt = Ngt;
-additionalInfo.ious = dis_r;
+additionalInfo.ious = distances;
 additionalInfo.td = td;
 
 end
