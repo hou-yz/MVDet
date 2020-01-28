@@ -1,4 +1,0 @@
-name
-ADL-Rundle-6
-ADL-Rundle-8
-Venice-2
