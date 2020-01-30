@@ -1,6 +1,6 @@
 import time
 import torch
-import copy
+import os
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
@@ -175,6 +175,7 @@ class BBOXTrainer(BaseTrainer):
 
         if res_fpath is not None:
             all_res_list = torch.cat(all_res_list, dim=0)
+            np.savetxt(os.path.dirname(res_fpath) + '/all_res.txt', all_res_list.numpy(), '%.8f')
             res_list = []
             for frame in np.unique(all_res_list[:, 0]):
                 res = all_res_list[all_res_list[:, 0] == frame, :]

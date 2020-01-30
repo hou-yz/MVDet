@@ -25,6 +25,7 @@ def main():
     parser.add_argument('--reID', action='store_true')
     parser.add_argument('--cls_thres', type=float, default=0.4)
     parser.add_argument('--soften', type=float, default=1, help='soften coefficient for softmax')
+    parser.add_argument('--arch', type=str, default='vgg11')
     parser.add_argument('-d', '--dataset', type=str, default='wildtrack_bbox', choices=['wildtrack_bbox'])
     parser.add_argument('--test_type', type=str, default='test', choices=['val', 'test'])
     parser.add_argument('-j', '--num_workers', type=int, default=4)
@@ -85,7 +86,7 @@ def main():
     print(vars(args))
 
     # model
-    model = BBOXClassifier(train_set).cuda()
+    model = BBOXClassifier(train_set.num_cam, args.arch).cuda()
     # model = nn.DataParallel(model)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 20, 1)

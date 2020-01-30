@@ -8,8 +8,8 @@ if contains(res_fpath,'train')
     frames = 0:5:1795;
 elseif contains(res_fpath,'val')
     splitStrLong='Validation Set';
-    frames = [1800];
-else contains(res_fpath,'test')
+    frames = [1800,1805];
+elseif contains(res_fpath,'test')
     splitStrLong='Test Set';
     frames = 1800:5:1995;
 end
@@ -36,8 +36,8 @@ gtAll={};
 detAll={};
 allFrCnt=0;
 evalMethod=1;
-gtAllMatrix=zeros(0,2);
-detAllMatrix=zeros(0,2);
+gtAllMatrix=zeros(0,4);
+detAllMatrix=zeros(0,4);
     
     gtRaw=readtable(gt_fpath);
     gtRaw=gtRaw{:,:};
@@ -48,7 +48,7 @@ detAllMatrix=zeros(0,2);
     
     % 
     detOne = {};
-    for t=1800:5:1995
+    for t=frames
         allFrCnt=allFrCnt+1;
         
         exgt=find(gtRaw(:,1)==t);
