@@ -55,8 +55,8 @@ def main():
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         train_trans = T.Compose([T.Resize([720, 1280]), T.ToTensor(), normalize, ])
         # test_trans = T.Compose([T.ToTensor(), ])
-        train_set = WildtrackFrame(data_path, train=True, transform=train_trans, featmap_reduce=4)
-        test_set = WildtrackFrame(data_path, train=False, transform=train_trans, featmap_reduce=4)
+        train_set = WildtrackFrame(data_path, train=True, transform=train_trans, grid_reduce=4)
+        test_set = WildtrackFrame(data_path, train=False, transform=train_trans, grid_reduce=4)
     else:
         raise Exception
 
@@ -80,8 +80,8 @@ def main():
     print(vars(args))
 
     # model
-    model = PerspTransDetector(train_set).cuda()
-    model = nn.DataParallel(model)
+    model = PerspTransDetector(train_set)
+    # model = nn.DataParallel(model)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 20, 1)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
@@ -106,7 +106,7 @@ def main():
 
         for epoch in range(1, args.epochs + 1):
             print('Training...')
-            train_loss, train_prec = trainer.train(epoch, train_loader, optimizer, args.log_interval, scheduler)
+            train_loss, train_prec = trainer.train(epoch, train_loader, optimizer, args.log_interval, scheduler, True)
             print('Testing...')
             test_loss, test_prec = trainer.test(test_loader)
 
@@ -125,7 +125,7 @@ def main():
         model.load_state_dict(torch.load(resume_fname))
         model.eval()
         print('Test loaded model...')
-        trainer.test(test_loader, args.visualize)
+        trainer.test(test_loader)
 
 
 if __name__ == '__main__':

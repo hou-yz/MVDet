@@ -2,67 +2,96 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import kornia
-from torchvision.models.vgg import vgg11, vgg16_bn
 from torchvision.models.alexnet import alexnet
+from torchvision.models.vgg import vgg11
+from torchvision.models.mobilenet import mobilenet_v2
+from multiview_detector.model.resnet import resnet18, resnet50
 
 import matplotlib.pyplot as plt
 
 
 class PerspTransDetector(nn.Module):
-    def __init__(self, dataset):
+    def __init__(self, dataset, arch='vgg11'):
         super().__init__()
-        self.num_cam, self.featmap_reduce = dataset.num_cam, dataset.featmap_reduce
-        self.img_shape, self.featmap_shape = dataset.img_shape, dataset.featmap_shape
+        self.num_cam, self.grid_reduce = dataset.num_cam, dataset.grid_reduce
+        self.img_shape, self.reducedgrid_shape = dataset.img_shape, dataset.reducedgrid_shape
         intrinsic_matrices, extrinsic_matrices = zip(*[dataset.get_intrinsic_extrinsic_matrix(cam)
                                                        for cam in range(dataset.num_cam)])
         self.projection_matrices = self.get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices)
 
-        self.base = vgg11().features
-        self.base[-1] = nn.Sequential()
+        if arch == 'vgg11':
+            base = vgg11().features
+            base[-1] = nn.Sequential()
+            base[-4] = nn.Sequential()
+            split = 10
+            self.base_pt1 = base[:split].to('cuda:1')
+            self.base_pt2 = base[split:].to('cuda:2')
+            out_channel = 512
+        elif arch == 'mobilenet':
+            self.base = mobilenet_v2().features
+            out_channel = 1280
+        elif arch == 'resnet18':
+            self.base = nn.Sequential(*list(resnet18().children())[:-2])
+            out_channel = 512
+        elif arch == 'resnet50':
+            self.base = nn.Sequential(*list(resnet50(replace_stride_with_dilation=[False, True, True]).children())[:-2])
+            out_channel = 2048
+        else:
+            raise Exception
         # 2.5cm -> 0.5m: 20x
-        self.classifier_head = nn.Sequential(nn.Conv2d(512 * 7 + 2, 512, 5, 1, 2), nn.ReLU(),
-                                             nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
-                                             nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
-                                             nn.Conv2d(512, 1, 1, 1, bias=False), nn.Sigmoid())
+        self.img_classifier = nn.Sequential(nn.Conv2d(out_channel, 32, 1), nn.ReLU(),
+                                            nn.Conv2d(32, 1, 1, bias=False)).to('cuda:3')
 
-        self.coord_map = self.create_coord_map(self.featmap_shape + [1])
+        self.map_classifier = nn.Sequential(nn.Conv2d(out_channel * 7 + 2, 512, 1), nn.ReLU(),
+                                            # nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
+                                            # nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
+                                            nn.Conv2d(512, 1, 1, bias=False)).to('cuda:3')
+
+        self.coord_map = self.create_coord_map(self.reducedgrid_shape + [1])
         pass
 
     def forward(self, imgs, visualize=False):
         B, N, C, H, W = imgs.shape
         assert N == self.num_cam
+        umsample_shape = list(map(lambda x: int(x / 2.5), self.img_shape))
         world_features = []
+        imgs_result = []
         for cam in range(self.num_cam):
-            img_feature = self.base(imgs[:, cam])
+            img_feature = self.base_pt1(imgs[:, cam].to('cuda:1'))
+            img_feature = self.base_pt2(img_feature.to('cuda:2'))
+            img_feature = F.interpolate(img_feature, umsample_shape, mode='bilinear')
+            img_res = self.img_classifier(img_feature.to('cuda:3'))
+            imgs_result.append(img_res)
             feature_shape = np.array(img_feature.shape[2:])
-            img_zoom_mat = np.diag(np.append(np.array(self.img_shape) / feature_shape, [1]))
-            featmap_zoom_mat = np.diag(np.append(np.ones([2]) / self.featmap_reduce, [1]))
-            proj_mat = torch.from_numpy(
-                np.matmul(featmap_zoom_mat, np.matmul(self.projection_matrices[cam], img_zoom_mat))).repeat(
-                [B, 1, 1]).float().to(img_feature.device)
-            world_feature = kornia.warp_perspective(img_feature, proj_mat, self.featmap_shape)
+            img_reduce = np.array(self.img_shape) / feature_shape
+            img_zoom_mat = np.diag(np.append(img_reduce, [1]))
+            featmap_zoom_mat = np.diag(np.append(np.ones([2]) / self.grid_reduce, [1]))
+            proj_mat = torch.from_numpy(featmap_zoom_mat @ self.projection_matrices[cam] @ img_zoom_mat
+                                        ).repeat([B, 1, 1]).float().to('cuda:0')
+            world_feature = kornia.warp_perspective(img_feature.to('cuda:0'), proj_mat, self.reducedgrid_shape)
             if visualize:
-                plt.imshow(world_feature[0, 0].detach().numpy() != 0)
+                plt.imshow(world_feature[0, 0].detach().cpu().numpy())
                 plt.show()
-            world_features.append(world_feature)
+            world_features.append(world_feature.to('cuda:0'))
 
-        world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to(imgs.device)], dim=1)
-        detector_result = self.classifier_head(world_features)
-        detector_result = nn.functional.interpolate(detector_result, self.featmap_shape, mode='bilinear')
-        return detector_result
+        world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:0')], dim=1)
+        map_result = self.map_classifier(world_features.to('cuda:3'))
+        map_result = F.interpolate(map_result, self.reducedgrid_shape, mode='bilinear')
+        return map_result, imgs_result
 
     def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices):
         projection_matrices = {}
         for cam in range(self.num_cam):
-            worldcoord2imgcoord_mat = np.matmul(intrinsic_matrices[cam], np.delete(extrinsic_matrices[cam], 2, 1))
+            worldcoord2imgcoord_mat = intrinsic_matrices[cam] @ np.delete(extrinsic_matrices[cam], 2, 1)
             worldgrid2worldcoord_mat = np.array([[2.5, 0, -300], [0, 2.5, -900], [0, 0, 1]])
-            worldgrid2imgcoord_mat = np.matmul(worldcoord2imgcoord_mat, worldgrid2worldcoord_mat)
+            worldgrid2imgcoord_mat = worldcoord2imgcoord_mat @ worldgrid2worldcoord_mat
             imgcoord2worldgrid_mat = np.linalg.inv(worldgrid2imgcoord_mat)
             # image of shape C,H,W (C,N_row,N_col); indexed as x,y,w,h (x,y,n_col,n_row)
             # matrix of shape N_row, N_col; indexed as x,y,n_row,n_col
             permutation_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
-            projection_matrices[cam] = np.matmul(permutation_mat, imgcoord2worldgrid_mat)
+            projection_matrices[cam] = permutation_mat @ imgcoord2worldgrid_mat
             pass
         return projection_matrices
 
@@ -83,29 +112,14 @@ def test():
     import torchvision.transforms as T
     from torch.utils.data import DataLoader
 
-    def perspective_trans(src, M, ):
-        dst = np.matmul(M, np.append(src, [1])[:, np.newaxis]).squeeze()
-        dst = dst[:2] / dst[2]
-        return dst
-
-    transform = T.Compose([T.Resize([360, 640]),  # H,W
+    transform = T.Compose([T.Resize([720, 1280]),  # H,W
                            T.ToTensor(),
                            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     dataset = WildtrackFrame(os.path.expanduser('~/Data/Wildtrack'), transform=transform)
-    dataloader = DataLoader(dataset, 1, True, num_workers=0)
-    imgs, gt = next(iter(dataloader))
+    dataloader = DataLoader(dataset, 1, False, num_workers=0)
+    imgs, map_gt, imgs_gt = next(iter(dataloader))
     model = PerspTransDetector(dataset)
     res = model(imgs, visualize=True)
-    # # test without calling the model forward
-    # imgs = torch.ones([1, 1, 1080, 1920]).float()
-    # for cam in range(dataset.num_cam):
-    #     proj_mat = torch.from_numpy(model.projection_matrices[cam]).repeat(
-    #         [imgs.shape[0], 1, 1]).float()
-    #
-    #     world_feature = kornia.warp_perspective(imgs, proj_mat, dataset.worldgrid_shape)
-    #     plt.imshow(world_feature[0, 0].detach().numpy() != 0)
-    #     plt.show()
-    #     pass
     pass
 
 

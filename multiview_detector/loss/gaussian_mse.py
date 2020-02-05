@@ -15,5 +15,11 @@ class GaussianMSE(nn.Module):
             requires_grad=False)
 
     def forward(self, x, target):
-        target = self.gaussian_filter(target.float())
+        target = self._traget_transform(x, target)
         return F.mse_loss(x, target)
+
+    def _traget_transform(self, x, target):
+        target = F.adaptive_max_pool2d(target, x.shape[2:])
+        with torch.no_grad():
+            target = self.gaussian_filter.to(target.device)(target)
+        return target

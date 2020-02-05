@@ -5,6 +5,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+from PIL import Image
 from .utils.meters import AverageMeter
 from .utils.nms import nms
 
@@ -15,28 +16,32 @@ class BaseTrainer(object):
 
 
 class PerspectiveTrainer(BaseTrainer):
-    def __init__(self, model, criterion):
+    def __init__(self, model, criterion, cls_thres=0.1):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
+        self.cls_thres = cls_thres
 
     def train(self, epoch, data_loader, optimizer, log_interval=100, cyclic_scheduler=None, visualize=False):
         self.model.train()
         losses = 0
         precision_s, recall_s = AverageMeter(), AverageMeter()
         t0 = time.time()
-        for batch_idx, (data, target) in enumerate(data_loader):
-            data, target = data.cuda(), target.cuda()
+        for batch_idx, (data, map_gt, imgs_gt) in enumerate(data_loader):
+            data, map_gt = data.cuda(), map_gt.cuda()
             optimizer.zero_grad()
-            output = self.model(data)
-            loss = self.criterion(output, target)
+            map_res, imgs_res = self.model(data)
+
+            loss = self.criterion(map_res, map_gt.to(map_res.device))
+            for img_res, img_gt in zip(imgs_res, imgs_gt):
+                loss += self.criterion(img_res, img_gt.to(img_res.device))
             loss.backward()
             optimizer.step()
             losses += loss.item()
-            pred = (output > 0.5).int()
-            true_positive = (pred.eq(target) * pred.eq(1)).sum().item()
+            pred = (map_res > self.cls_thres).int().to(map_gt.device)
+            true_positive = (pred.eq(map_gt) * pred.eq(1)).sum().item()
             false_positive = pred.sum().item() - true_positive
-            false_negative = target.sum().item() - true_positive
+            false_negative = map_gt.sum().item() - true_positive
             precision = true_positive / (true_positive + false_positive + 1e-4)
             recall = true_positive / (true_positive + false_negative + 1e-4)
             precision_s.update(precision)
@@ -51,16 +56,22 @@ class PerspectiveTrainer(BaseTrainer):
                 t1 = time.time()
                 t_epoch = t1 - t0
                 print('Train Epoch: {}, Batch:{}, \tLoss: {:.6f}, '
-                      'precision: {:.1f}%, Recall: {:.1f}%, \tTime: {:.3f}'.format(
+                      'precision: {:.1f}%, Recall: {:.1f}%, \tTime: {:.3f}, maxima: {:.3f}'.format(
                     epoch, (batch_idx + 1), losses / (batch_idx + 1), precision_s.avg * 100, recall_s.avg * 100,
-                    t_epoch))
+                    t_epoch, map_res.max()))
                 if visualize:
                     fig = plt.figure()
                     subplt0 = fig.add_subplot(211, title="output")
                     subplt1 = fig.add_subplot(212, title="target")
-                    subplt0.imshow(output[0].cpu().detach().numpy().squeeze())
-                    subplt1.imshow(self.criterion.gaussian_filter(target.float())[0].cpu().detach().numpy().squeeze())
-                    plt.show()
+                    subplt0.imshow(map_res.cpu().detach().numpy().squeeze())
+                    subplt1.imshow(self.criterion._traget_transform(map_res, map_gt)
+                                   .cpu().detach().numpy().squeeze())
+                    plt.savefig('map.jpg')
+                    plt.close(fig)
+
+                    # visualizing the heatmap for per-view estimation
+                    plt.imshow(imgs_res[0].detach().cpu().numpy().squeeze())
+                    plt.savefig('cam0.jpg')
                 pass
 
         t1 = time.time()
@@ -69,22 +80,24 @@ class PerspectiveTrainer(BaseTrainer):
               'precision: {:.1f}%, Recall: {:.1f}%, \tTime: {:.3f}'.format(
             epoch, len(data_loader), losses / len(data_loader), precision_s.avg * 100, recall_s.avg * 100, t_epoch))
 
-        return losses / len(data_loader), precision_s.avg
+        return losses / len(data_loader), precision_s.avg * 100
 
     def test(self, test_loader):
         self.model.eval()
         losses = 0
         precision_s, recall_s = AverageMeter(), AverageMeter()
-        for batch_idx, (data, target) in enumerate(test_loader):
-            data, target = data.cuda(), target.cuda()
+        for batch_idx, (data, map_gt, imgs_gt) in enumerate(test_loader):
+            data, map_gt = data.cuda(), map_gt.cuda()
             with torch.no_grad():
-                output = self.model(data)
-            loss = self.criterion(output, target)
+                map_res, imgs_res = self.model(data)
+            loss = self.criterion(map_res, map_gt.to(map_res.device))
+            for img_res, img_gt in zip(imgs_res, imgs_gt):
+                loss += self.criterion(img_res, img_gt.to(img_res.device))
             losses += loss.item()
-            pred = output > 0.5
-            true_positive = (pred.eq(target) * pred.eq(1)).sum().item()
+            pred = (map_res > self.cls_thres).int().to(map_gt.device)
+            true_positive = (pred.eq(map_gt) * pred.eq(1)).sum().item()
             false_positive = pred.sum().item() - true_positive
-            false_negative = target.sum().item() - true_positive
+            false_negative = map_gt.sum().item() - true_positive
             precision = true_positive / (true_positive + false_positive + 1e-4)
             recall = true_positive / (true_positive + false_negative + 1e-4)
             precision_s.update(precision)

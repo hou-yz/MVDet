@@ -7,7 +7,6 @@ import xml.etree.ElementTree as ET
 from scipy.sparse import coo_matrix
 from torchvision.datasets import VisionDataset
 import torch
-from torch.nn.functional import conv2d
 from torchvision.transforms import ToTensor
 from multiview_detector.utils.projection import *
 
@@ -19,22 +18,23 @@ extrinsic_camera_matrix_filenames = ['extr_CVLab1.xml', 'extr_CVLab2.xml', 'extr
 
 class WildtrackFrame(VisionDataset):
     def __init__(self, root, train=True, transform=ToTensor(), target_transform=ToTensor(),
-                 gaussian=True, reID=False, featmap_reduce=4, train_ratio=0.9):
+                 gaussian=True, reID=False, grid_reduce=4, train_ratio=0.9):
         super().__init__(root, transform=transform, target_transform=target_transform)
 
         self.root = root
         self.num_cam, self.num_frame = 7, 2000
-        self.gaussian, sigma, kernel_size = gaussian, 10 / featmap_reduce, 5
-        self.reID, self.featmap_reduce = reID, featmap_reduce
+        sigma, kernel_size = 10 / grid_reduce, 5
+        self.reID, self.grid_reduce = reID, grid_reduce
         self.img_shape, self.worldgrid_shape = [1080, 1920], [480, 1440]  # H,W; N_row,N_col
-        self.featmap_shape = (np.array(self.worldgrid_shape) / self.featmap_reduce).astype(int).tolist()
+        self.reducedgrid_shape = list(map(lambda x: int(x / self.grid_reduce), self.worldgrid_shape))
         if train:
             frame_range = range(0, int(self.num_frame * train_ratio))
         else:
             frame_range = range(int(self.num_frame * train_ratio), self.num_frame)
 
         self.img_fpaths = {cam: {} for cam in range(self.num_cam)}
-        self.img_gt = {}
+        self.map_gt = {}
+        self.imgs_gt = {}
         self.intrinsic_matrices, self.extrinsic_matrices = {}, {}
 
         for camera_folder in sorted(os.listdir(os.path.join(root, 'Image_subsets'))):
@@ -51,13 +51,28 @@ class WildtrackFrame(VisionDataset):
                 with open(os.path.join(root, 'annotations_positions', fname)) as json_file:
                     all_pedestrians = json.load(json_file)
                 i_s, j_s, v_s = [], [], []
+                row_cam_s, col_cam_s, v_cam_s = [[] for _ in range(self.num_cam)], \
+                                                [[] for _ in range(self.num_cam)], \
+                                                [[] for _ in range(self.num_cam)]
                 for single_pedestrian in all_pedestrians:
                     x, y = get_worldgrid_from_posid(single_pedestrian['positionID'])
-                    i_s.append(int(x / self.featmap_reduce))
-                    j_s.append(int(y / self.featmap_reduce))
+                    i_s.append(int(x / self.grid_reduce))
+                    j_s.append(int(y / self.grid_reduce))
                     v_s.append(single_pedestrian['personID'] + 1 if self.reID else 1)
-                occupancy_map = coo_matrix((v_s, (i_s, j_s)), shape=self.featmap_shape)
-                self.img_gt[frame] = occupancy_map
+                    for cam in range(self.num_cam):
+                        x = min(int((single_pedestrian['views'][cam]['xmin'] +
+                                     single_pedestrian['views'][cam]['xmax']) / 2), self.img_shape[1] - 1)
+                        y = min(single_pedestrian['views'][cam]['ymax'], self.img_shape[0] - 1)
+                        if x > 0 and y > 0:
+                            row_cam_s[cam].append(y)
+                            col_cam_s[cam].append(x)
+                            v_cam_s[cam].append(single_pedestrian['personID'] + 1 if self.reID else 1)
+                occupancy_map = coo_matrix((v_s, (i_s, j_s)), shape=self.reducedgrid_shape)
+                self.map_gt[frame] = occupancy_map
+                self.imgs_gt[frame] = {}
+                for cam in range(self.num_cam):
+                    img_gt = coo_matrix((v_cam_s[cam], (row_cam_s[cam], col_cam_s[cam])), shape=self.img_shape)
+                    self.imgs_gt[frame][cam] = img_gt
 
         self.intrinsic_matrices, self.extrinsic_matrices = zip(
             *[self.get_intrinsic_extrinsic_matrix(cam) for cam in range(self.num_cam)])
@@ -69,7 +84,7 @@ class WildtrackFrame(VisionDataset):
         pass
 
     def __getitem__(self, index):
-        frame = list(self.img_gt.keys())[index]
+        frame = list(self.map_gt.keys())[index]
         imgs = []
         for cam in range(self.num_cam):
             fpath = self.img_fpaths[cam][frame]
@@ -78,15 +93,23 @@ class WildtrackFrame(VisionDataset):
                 img = self.transform(img)
             imgs.append(img)
         imgs = torch.stack(imgs)
-        gt = self.img_gt[frame].toarray()
+        map_gt = self.map_gt[frame].toarray()
         if self.reID:
-            gt = (gt > 0).int()
+            map_gt = (map_gt > 0).int()
         if self.target_transform is not None:
-            gt = self.target_transform(gt)
-        return imgs, gt
+            map_gt = self.target_transform(map_gt)
+        imgs_gt = []
+        for cam in range(self.num_cam):
+            img_gt = self.imgs_gt[frame][cam].toarray()
+            if self.reID:
+                img_gt = (img_gt > 0).int()
+            if self.target_transform is not None:
+                img_gt = self.target_transform(img_gt)
+            imgs_gt.append(img_gt.float())
+        return imgs, map_gt.float(), imgs_gt
 
     def __len__(self):
-        return len(self.img_gt.keys())
+        return len(self.map_gt.keys())
 
     def get_intrinsic_extrinsic_matrix(self, camera_i):
         intrinsic_camera_path = os.path.join(self.root, 'calibrations', 'intrinsic_zero')
@@ -94,7 +117,6 @@ class WildtrackFrame(VisionDataset):
                                                              intrinsic_camera_matrix_filenames[camera_i]),
                                                 flags=cv2.FILE_STORAGE_READ)
         intrinsic_matrix = intrinsic_params_file.getNode('camera_matrix').mat()
-        distortion_coeff = intrinsic_params_file.getNode('distortion_coefficients').mat()
         intrinsic_params_file.release()
 
         extrinsic_params_file_root = ET.parse(os.path.join(self.root, 'calibrations', 'extrinsic',
@@ -144,7 +166,7 @@ def test():
     # plt.imshow(np.sum(np.stack(world_grid_maps), axis=0))
     # plt.show()
     pass
-    imgs, gt = dataset.__getitem__(0)
+    imgs, map_gt, imgs_gt = dataset.__getitem__(0)
     pass
 
 
