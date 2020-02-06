@@ -52,7 +52,7 @@ def main():
         torch.backends.cudnn.benchmark = True
 
     # dataset
-    if args.dataset == 'wildtrack_bbox':
+    if 'wildtrack' in args.dataset:
         data_path = os.path.expanduser('~/Data/wildtrack_bbox')
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         train_trans = T.Compose([T.Resize([256, 128]), T.ToTensor(), normalize, ])

@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 
 class PerspTransDetector(nn.Module):
-    def __init__(self, dataset, arch='vgg11'):
+    def __init__(self, dataset, arch='resnet18'):
         super().__init__()
         self.num_cam, self.grid_reduce = dataset.num_cam, dataset.grid_reduce
         self.img_shape, self.reducedgrid_shape = dataset.img_shape, dataset.reducedgrid_shape
@@ -29,15 +29,18 @@ class PerspTransDetector(nn.Module):
             self.base_pt1 = base[:split].to('cuda:1')
             self.base_pt2 = base[split:].to('cuda:2')
             out_channel = 512
-        elif arch == 'mobilenet':
-            self.base = mobilenet_v2().features
-            out_channel = 1280
+        # elif arch == 'mobilenet':
+        #     self.base = mobilenet_v2().features
+        #     out_channel = 1280
         elif arch == 'resnet18':
-            self.base = nn.Sequential(*list(resnet18().children())[:-2])
+            base = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, True, True]).children())[:-2])
+            split = 7
+            self.base_pt1 = base[:split].to('cuda:1')
+            self.base_pt2 = base[split:].to('cuda:2')
             out_channel = 512
-        elif arch == 'resnet50':
-            self.base = nn.Sequential(*list(resnet50(replace_stride_with_dilation=[False, True, True]).children())[:-2])
-            out_channel = 2048
+        # elif arch == 'resnet50':
+        #     self.base = nn.Sequential(*list(resnet50(replace_stride_with_dilation=[False, True, True]).children())[:-2])
+        #     out_channel = 2048
         else:
             raise Exception
         # 2.5cm -> 0.5m: 20x
@@ -117,7 +120,7 @@ def test():
                            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     dataset = WildtrackFrame(os.path.expanduser('~/Data/Wildtrack'), transform=transform)
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
-    imgs, map_gt, imgs_gt = next(iter(dataloader))
+    imgs, map_gt, imgs_gt, frame = next(iter(dataloader))
     model = PerspTransDetector(dataset)
     res = model(imgs, visualize=True)
     pass

@@ -4,24 +4,20 @@
 import matplotlib.pyplot as plt
 
 
-def draw_curve(path, x_epoch, train_loss, train_prec, og_test_loss, og_test_prec,
-               masked_test_loss=None, masked_test_prec=None, prec_labels=['train', 'test (og)', 'test (masked)'],
-               loss_labels=None):
+def draw_curve(path, x_epoch, train_loss, train_prec, test_loss, test_prec, test_moda=None):
     fig = plt.figure()
-    ax0 = fig.add_subplot(121, title="loss")
-    ax1 = fig.add_subplot(122, title="prec")
-    if loss_labels is None:
-        loss_labels = prec_labels
-    ax0.plot(x_epoch, train_loss, 'bo-', label=loss_labels[0] + ': {:.3f}'.format(train_loss[-1]))
-    ax1.plot(x_epoch, train_prec, 'bo-', label=prec_labels[0] + ': {:.3f}'.format(train_prec[-1]))
-    ax0.plot(x_epoch, og_test_loss, 'ro-', label=loss_labels[1] + ': {:.3f}'.format(og_test_loss[-1]))
-    ax1.plot(x_epoch, og_test_prec, 'ro-', label=prec_labels[1] + ': {:.3f}'.format(og_test_prec[-1]))
-    if masked_test_loss is not None:
-        ax0.plot(x_epoch, masked_test_loss, 'go-', label=loss_labels[2] + ': {:.3f}'.format(masked_test_loss[-1]))
-    if masked_test_prec is not None:
-        ax1.plot(x_epoch, masked_test_prec, 'go-', label=prec_labels[2] + ': {:.3f}'.format(masked_test_prec[-1]))
+    ax1 = fig.add_subplot(131, title="loss")
+    ax2 = fig.add_subplot(132, title="prec")
+    ax1.plot(x_epoch, train_loss, 'bo-', label='train' + ': {:.3f}'.format(train_loss[-1]))
+    ax2.plot(x_epoch, train_prec, 'bo-', label='train' + ': {:.3f}'.format(train_prec[-1]))
+    ax1.plot(x_epoch, test_loss, 'ro-', label='test' + ': {:.3f}'.format(test_loss[-1]))
+    ax2.plot(x_epoch, test_prec, 'ro-', label='test' + ': {:.3f}'.format(test_prec[-1]))
 
-    ax0.legend()
     ax1.legend()
+    ax2.legend()
+    if test_moda is not None:
+        ax3 = fig.add_subplot(133, title="moda")
+        ax3.plot(x_epoch, test_moda, 'ro-', label='test' + ': {:.3f}'.format(test_prec[-1]))
+        ax3.legend()
     fig.savefig(path)
     plt.close(fig)

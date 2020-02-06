@@ -18,12 +18,12 @@ extrinsic_camera_matrix_filenames = ['extr_CVLab1.xml', 'extr_CVLab2.xml', 'extr
 
 class WildtrackFrame(VisionDataset):
     def __init__(self, root, train=True, transform=ToTensor(), target_transform=ToTensor(),
-                 gaussian=True, reID=False, grid_reduce=4, train_ratio=0.9):
+                 reID=False, grid_reduce=4, train_ratio=0.9, force_download=False):
         super().__init__(root, transform=transform, target_transform=target_transform)
 
         self.root = root
         self.num_cam, self.num_frame = 7, 2000
-        sigma, kernel_size = 10 / grid_reduce, 5
+        sigma, kernel_size = 20 / grid_reduce, 10
         self.reID, self.grid_reduce = reID, grid_reduce
         self.img_shape, self.worldgrid_shape = [1080, 1920], [480, 1440]  # H,W; N_row,N_col
         self.reducedgrid_shape = list(map(lambda x: int(x / self.grid_reduce), self.worldgrid_shape))
@@ -37,18 +37,47 @@ class WildtrackFrame(VisionDataset):
         self.imgs_gt = {}
         self.intrinsic_matrices, self.extrinsic_matrices = {}, {}
 
-        for camera_folder in sorted(os.listdir(os.path.join(root, 'Image_subsets'))):
+        self.download(frame_range)
+
+        self.gt_fpath = os.path.join(root, 'gt.txt')
+        if not os.path.exists(self.gt_fpath) or force_download:
+            self.prepare_gt()
+
+        self.intrinsic_matrices, self.extrinsic_matrices = zip(
+            *[self.get_intrinsic_extrinsic_matrix(cam) for cam in range(self.num_cam)])
+
+        x, y = np.mgrid[-kernel_size:kernel_size + 1, -kernel_size:kernel_size + 1]
+        pos = np.stack([x, y], axis=2)
+        self.kernel = multivariate_normal.pdf(pos, [0, 0], np.identity(2) * sigma)
+        self.kernel = self.kernel / self.kernel.max()
+        pass
+
+    def prepare_gt(self):
+        og_gt = []
+        for fname in sorted(os.listdir(os.path.join(self.root, 'annotations_positions'))):
+            frame = int(fname.split('.')[0])
+            with open(os.path.join(self.root, 'annotations_positions', fname)) as json_file:
+                all_pedestrians = json.load(json_file)
+            for single_pedestrian in all_pedestrians:
+                grid_x, grid_y = get_worldgrid_from_posid(single_pedestrian['positionID'])
+                og_gt.append(np.array([frame, grid_x, grid_y]))
+        og_gt = np.stack(og_gt, axis=0)
+        os.makedirs(os.path.dirname(self.gt_fpath), exist_ok=True)
+        np.savetxt(self.gt_fpath, og_gt, '%d')
+
+    def download(self, frame_range):
+        for camera_folder in sorted(os.listdir(os.path.join(self.root, 'Image_subsets'))):
             cam = int(camera_folder[-1]) - 1
-            for fname in sorted(os.listdir(os.path.join(root, 'Image_subsets', camera_folder))):
+            for fname in sorted(os.listdir(os.path.join(self.root, 'Image_subsets', camera_folder))):
                 frame = int(fname.split('.')[0])
                 if frame in frame_range:
-                    self.img_fpaths[cam][frame] = os.path.join(root, 'Image_subsets', camera_folder, fname)
+                    self.img_fpaths[cam][frame] = os.path.join(self.root, 'Image_subsets', camera_folder, fname)
             pass
 
-        for fname in sorted(os.listdir(os.path.join(root, 'annotations_positions'))):
+        for fname in sorted(os.listdir(os.path.join(self.root, 'annotations_positions'))):
             frame = int(fname.split('.')[0])
             if frame in frame_range:
-                with open(os.path.join(root, 'annotations_positions', fname)) as json_file:
+                with open(os.path.join(self.root, 'annotations_positions', fname)) as json_file:
                     all_pedestrians = json.load(json_file)
                 i_s, j_s, v_s = [], [], []
                 row_cam_s, col_cam_s, v_cam_s = [[] for _ in range(self.num_cam)], \
@@ -74,15 +103,6 @@ class WildtrackFrame(VisionDataset):
                     img_gt = coo_matrix((v_cam_s[cam], (row_cam_s[cam], col_cam_s[cam])), shape=self.img_shape)
                     self.imgs_gt[frame][cam] = img_gt
 
-        self.intrinsic_matrices, self.extrinsic_matrices = zip(
-            *[self.get_intrinsic_extrinsic_matrix(cam) for cam in range(self.num_cam)])
-
-        x, y = np.mgrid[-kernel_size:kernel_size + 1, -kernel_size:kernel_size + 1]
-        pos = np.stack([x, y], axis=2)
-        self.kernel = multivariate_normal.pdf(pos, [0, 0], np.identity(2) * sigma)
-        self.kernel = self.kernel / self.kernel.max()
-        pass
-
     def __getitem__(self, index):
         frame = list(self.map_gt.keys())[index]
         imgs = []
@@ -106,7 +126,7 @@ class WildtrackFrame(VisionDataset):
             if self.target_transform is not None:
                 img_gt = self.target_transform(img_gt)
             imgs_gt.append(img_gt.float())
-        return imgs, map_gt.float(), imgs_gt
+        return imgs, map_gt.float(), imgs_gt, frame
 
     def __len__(self):
         return len(self.map_gt.keys())
