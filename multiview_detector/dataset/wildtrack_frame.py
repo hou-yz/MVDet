@@ -23,7 +23,7 @@ class WildtrackFrame(VisionDataset):
 
         self.root = root
         self.num_cam, self.num_frame = 7, 2000
-        sigma, kernel_size = 20 / grid_reduce, 10
+        sigma, kernel_size = 20 / grid_reduce, 20
         self.reID, self.grid_reduce = reID, grid_reduce
         self.img_shape, self.worldgrid_shape = [1080, 1920], [480, 1440]  # H,W; N_row,N_col
         self.reducedgrid_shape = list(map(lambda x: int(x / self.grid_reduce), self.worldgrid_shape))
@@ -35,7 +35,7 @@ class WildtrackFrame(VisionDataset):
         self.img_fpaths = {cam: {} for cam in range(self.num_cam)}
         self.map_gt = {}
         self.imgs_gt = {}
-        self.intrinsic_matrices, self.extrinsic_matrices = {}, {}
+        # self.intrinsic_matrices, self.extrinsic_matrices = {}, {}
 
         self.download(frame_range)
 
@@ -186,7 +186,7 @@ def test():
     # plt.imshow(np.sum(np.stack(world_grid_maps), axis=0))
     # plt.show()
     pass
-    imgs, map_gt, imgs_gt = dataset.__getitem__(0)
+    imgs, map_gt, imgs_gt, _ = dataset.__getitem__(0)
     pass
 
 
