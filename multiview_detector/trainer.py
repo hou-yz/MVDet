@@ -17,7 +17,7 @@ class BaseTrainer(object):
 
 
 class PerspectiveTrainer(BaseTrainer):
-    def __init__(self, model, criterion, logdir, grid_reduce=4, cls_thres=0.1):
+    def __init__(self, model, criterion, logdir, grid_reduce=4, cls_thres=0.4):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
@@ -33,10 +33,10 @@ class PerspectiveTrainer(BaseTrainer):
         for batch_idx, (data, map_gt, imgs_gt, _) in enumerate(data_loader):
             optimizer.zero_grad()
             map_res, imgs_res = self.model(data)
-
-            loss = self.criterion(map_res, map_gt.to(map_res.device))
+            loss = 0
             for img_res, img_gt in zip(imgs_res, imgs_gt):
                 loss += self.criterion(img_res, img_gt.to(img_res.device))
+            loss = self.criterion(map_res, map_gt.to(map_res.device)) + loss / len(imgs_gt)
             loss.backward()
             optimizer.step()
             losses += loss.item()
@@ -129,6 +129,8 @@ class PerspectiveTrainer(BaseTrainer):
             np.savetxt(res_fpath, res_list, '%d')
 
             recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath))
+            print('moda: {:.1f}%, modp: {:.1f}%, precision: {:.1f}%, recall: {:.1f}%'.
+                  format(moda, modp, precision, recall))
 
         print('Test, Loss: {:.6f}, precision: {:.1f}%, Recall: {:.1f}%'.format(losses / (len(test_loader) + 1),
                                                                                precision_s.avg * 100,

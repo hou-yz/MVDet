@@ -17,7 +17,7 @@ def matlab_eval(res_fpath, gt_fpath):
 
 
 if __name__ == "__main__":
-    res_fpath = '/home/houyz/Code/multiview_one_stage/logs/wildtrack_frame/2020-02-06_15-57-54/test_nms.txt'
+    res_fpath = '/home/houyz/Code/multiview_one_stage/logs/wildtrack_frame/2020-02-11_16-26-58/test_nms.txt'
     gt_fpath = '/home/houyz/Code/multiview_one_stage/data/WildtrackBBOX/gt.txt'
     all_res_list = np.loadtxt(os.path.dirname(res_fpath) + '/all_res.txt')
     res_list = []

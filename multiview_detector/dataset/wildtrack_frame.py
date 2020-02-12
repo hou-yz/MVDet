@@ -35,8 +35,6 @@ class WildtrackFrame(VisionDataset):
         self.img_fpaths = {cam: {} for cam in range(self.num_cam)}
         self.map_gt = {}
         self.imgs_gt = {}
-        # self.intrinsic_matrices, self.extrinsic_matrices = {}, {}
-
         self.download(frame_range)
 
         self.gt_fpath = os.path.join(root, 'gt.txt')
