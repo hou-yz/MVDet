@@ -15,11 +15,21 @@ import matplotlib.pyplot as plt
 class PerspTransDetector(nn.Module):
     def __init__(self, dataset, arch='resnet18'):
         super().__init__()
-        self.num_cam, self.grid_reduce = dataset.num_cam, dataset.grid_reduce
+        self.num_cam = dataset.num_cam
         self.img_shape, self.reducedgrid_shape = dataset.img_shape, dataset.reducedgrid_shape
         intrinsic_matrices, extrinsic_matrices = zip(*[dataset.get_intrinsic_extrinsic_matrix(cam)
                                                        for cam in range(dataset.num_cam)])
-        self.projection_matrices = self.get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices)
+        imgcoord2worldgrid_matrices = self.get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices)
+        self.coord_map = self.create_coord_map(self.reducedgrid_shape + [1])
+        # img
+        self.upsample_shape = list(map(lambda x: int(x / dataset.img_reduce), self.img_shape))
+        img_reduce = np.array(self.img_shape) / np.array(self.upsample_shape)
+        img_zoom_mat = np.diag(np.append(img_reduce, [1]))
+        # map
+        map_zoom_mat = np.diag(np.append(np.ones([2]) / dataset.grid_reduce, [1]))
+        # projection matrices: img feat -> map feat
+        self.proj_mats = [torch.from_numpy(map_zoom_mat @ imgcoord2worldgrid_matrices[cam] @ img_zoom_mat)
+                          for cam in range(self.num_cam)]
 
         if arch == 'vgg11':
             base = vgg11().features
@@ -29,50 +39,35 @@ class PerspTransDetector(nn.Module):
             self.base_pt1 = base[:split].to('cuda:1')
             self.base_pt2 = base[split:].to('cuda:0')
             out_channel = 512
-        # elif arch == 'mobilenet':
-        #     self.base = mobilenet_v2().features
-        #     out_channel = 1280
         elif arch == 'resnet18':
             base = nn.Sequential(*list(resnet18(replace_stride_with_dilation=[False, True, True]).children())[:-2])
             split = 7
             self.base_pt1 = base[:split].to('cuda:1')
             self.base_pt2 = base[split:].to('cuda:0')
             out_channel = 512
-        # elif arch == 'resnet50':
-        #     self.base = nn.Sequential(*list(resnet50(replace_stride_with_dilation=[False, True, True]).children())[:-2])
-        #     out_channel = 2048
         else:
             raise Exception
         # 2.5cm -> 0.5m: 20x
         self.img_classifier = nn.Sequential(nn.Conv2d(out_channel, 32, 1), nn.ReLU(),
                                             nn.Conv2d(32, 1, 1, bias=False)).to('cuda:0')
-
         self.map_classifier = nn.Sequential(nn.Conv2d(out_channel * 7 + 2, 512, 1), nn.ReLU(),
                                             # nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
                                             # nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
                                             nn.Conv2d(512, 1, 1, bias=False)).to('cuda:0')
-
-        self.coord_map = self.create_coord_map(self.reducedgrid_shape + [1])
         pass
 
     def forward(self, imgs, visualize=False):
         B, N, C, H, W = imgs.shape
         assert N == self.num_cam
-        umsample_shape = list(map(lambda x: int(x / 4), self.img_shape))
         world_features = []
         imgs_result = []
         for cam in range(self.num_cam):
             img_feature = self.base_pt1(imgs[:, cam].to('cuda:1'))
             img_feature = self.base_pt2(img_feature.to('cuda:0'))
-            img_feature = F.interpolate(img_feature, umsample_shape, mode='bilinear')
+            img_feature = F.interpolate(img_feature, self.upsample_shape, mode='bilinear')
             img_res = self.img_classifier(img_feature.to('cuda:0'))
             imgs_result.append(img_res)
-            feature_shape = np.array(img_feature.shape[2:])
-            img_reduce = np.array(self.img_shape) / feature_shape
-            img_zoom_mat = np.diag(np.append(img_reduce, [1]))
-            featmap_zoom_mat = np.diag(np.append(np.ones([2]) / self.grid_reduce, [1]))
-            proj_mat = torch.from_numpy(featmap_zoom_mat @ self.projection_matrices[cam] @ img_zoom_mat
-                                        ).repeat([B, 1, 1]).float().to('cuda:0')
+            proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:0')
             world_feature = kornia.warp_perspective(img_feature.to('cuda:0'), proj_mat, self.reducedgrid_shape)
             if visualize:
                 plt.imshow(world_feature[0, 0].detach().cpu().numpy())

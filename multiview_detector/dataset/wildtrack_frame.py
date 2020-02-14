@@ -18,13 +18,14 @@ extrinsic_camera_matrix_filenames = ['extr_CVLab1.xml', 'extr_CVLab2.xml', 'extr
 
 class WildtrackFrame(VisionDataset):
     def __init__(self, root, train=True, transform=ToTensor(), target_transform=ToTensor(),
-                 reID=False, grid_reduce=4, train_ratio=0.9, force_download=False):
+                 reID=False, grid_reduce=4, img_reduce=4, train_ratio=0.9, force_download=False):
         super().__init__(root, transform=transform, target_transform=target_transform)
 
         self.root = root
         self.num_cam, self.num_frame = 7, 2000
-        sigma, kernel_size = 20 / grid_reduce, 20
-        self.reID, self.grid_reduce = reID, grid_reduce
+        map_sigma, map_kernel_size = 20 / grid_reduce, 20
+        img_sigma, img_kernel_size = 10 / img_reduce, 10
+        self.reID, self.grid_reduce, self.img_reduce = reID, grid_reduce, img_reduce
         self.img_shape, self.worldgrid_shape = [1080, 1920], [480, 1440]  # H,W; N_row,N_col
         self.reducedgrid_shape = list(map(lambda x: int(x / self.grid_reduce), self.worldgrid_shape))
         if train:
@@ -44,10 +45,14 @@ class WildtrackFrame(VisionDataset):
         self.intrinsic_matrices, self.extrinsic_matrices = zip(
             *[self.get_intrinsic_extrinsic_matrix(cam) for cam in range(self.num_cam)])
 
-        x, y = np.mgrid[-kernel_size:kernel_size + 1, -kernel_size:kernel_size + 1]
+        x, y = np.mgrid[-map_kernel_size:map_kernel_size + 1, -map_kernel_size:map_kernel_size + 1]
         pos = np.stack([x, y], axis=2)
-        self.kernel = multivariate_normal.pdf(pos, [0, 0], np.identity(2) * sigma)
-        self.kernel = self.kernel / self.kernel.max()
+        self.map_kernel = multivariate_normal.pdf(pos, [0, 0], np.identity(2) * map_sigma)
+        self.map_kernel = self.map_kernel / self.map_kernel.max()
+        x, y = np.mgrid[-img_kernel_size:img_kernel_size + 1, -img_kernel_size:img_kernel_size + 1]
+        pos = np.stack([x, y], axis=2)
+        self.img_kernel = multivariate_normal.pdf(pos, [0, 0], np.identity(2) * img_sigma)
+        self.img_kernel = self.img_kernel / self.img_kernel.max()
         pass
 
     def prepare_gt(self):

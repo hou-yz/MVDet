@@ -6,9 +6,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from PIL import Image
-from .utils.meters import AverageMeter
 from multiview_detector.evaluation.evaluate import matlab_eval
-from .utils.nms import nms
+from multiview_detector.utils.nms import nms
+from multiview_detector.utils.meters import AverageMeter
+from multiview_detector.utils.image_utils import add_heatmap_to_image
 
 
 class BaseTrainer(object):
@@ -17,26 +18,32 @@ class BaseTrainer(object):
 
 
 class PerspectiveTrainer(BaseTrainer):
-    def __init__(self, model, criterion, logdir, grid_reduce=4, cls_thres=0.4):
+    def __init__(self, model, criterion, logdir, denormalize, cls_thres=0.4):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
-        self.grid_reduce = grid_reduce
         self.cls_thres = cls_thres
         self.logdir = logdir
+        self.denormalize = denormalize
 
     def train(self, epoch, data_loader, optimizer, log_interval=100, cyclic_scheduler=None, visualize=False):
         self.model.train()
         losses = 0
         precision_s, recall_s = AverageMeter(), AverageMeter()
         t0 = time.time()
+        t_b = time.time()
+        t_forward = 0
+        t_backward = 0
         for batch_idx, (data, map_gt, imgs_gt, _) in enumerate(data_loader):
             optimizer.zero_grad()
             map_res, imgs_res = self.model(data)
+            t_f = time.time()
+            t_forward += t_f - t_b
             loss = 0
             for img_res, img_gt in zip(imgs_res, imgs_gt):
-                loss += self.criterion(img_res, img_gt.to(img_res.device))
-            loss = self.criterion(map_res, map_gt.to(map_res.device)) + loss / len(imgs_gt)
+                loss += self.criterion(img_res, img_gt.to(img_res.device), data_loader.dataset.img_kernel)
+            loss = self.criterion(map_res, map_gt.to(map_res.device), data_loader.dataset.map_kernel) + \
+                   loss / len(imgs_gt)
             loss.backward()
             optimizer.step()
             losses += loss.item()
@@ -48,6 +55,10 @@ class PerspectiveTrainer(BaseTrainer):
             recall = true_positive / (true_positive + false_negative + 1e-4)
             precision_s.update(precision)
             recall_s.update(recall)
+
+            t_b = time.time()
+            t_backward += t_b - t_f
+
             if cyclic_scheduler is not None:
                 if isinstance(cyclic_scheduler, torch.optim.lr_scheduler.CosineAnnealingWarmRestarts):
                     cyclic_scheduler.step(epoch - 1 + batch_idx / len(data_loader))
@@ -58,53 +69,59 @@ class PerspectiveTrainer(BaseTrainer):
                 t1 = time.time()
                 t_epoch = t1 - t0
                 print('Train Epoch: {}, Batch:{}, \tLoss: {:.6f}, '
-                      'precision: {:.1f}%, Recall: {:.1f}%, \tTime: {:.3f}, maxima: {:.3f}'.format(
+                      'prec: {:.1f}%, recall: {:.1f}%, \tTime: {:.1f} (f{:.3f}+b{:.3f}), maxima: {:.3f}'.format(
                     epoch, (batch_idx + 1), losses / (batch_idx + 1), precision_s.avg * 100, recall_s.avg * 100,
-                    t_epoch, map_res.max()))
-                if visualize:
-                    fig = plt.figure()
-                    subplt0 = fig.add_subplot(211, title="output")
-                    subplt1 = fig.add_subplot(212, title="target")
-                    subplt0.imshow(map_res.cpu().detach().numpy().squeeze())
-                    subplt1.imshow(self.criterion._traget_transform(map_res, map_gt)
-                                   .cpu().detach().numpy().squeeze())
-                    plt.savefig(os.path.join(self.logdir, 'map.jpg'))
-                    plt.close(fig)
-
-                    # visualizing the heatmap for per-view estimation
-                    plt.imshow(imgs_res[0].detach().cpu().numpy().squeeze())
-                    plt.savefig(os.path.join(self.logdir, 'cam0.jpg'))
-                    plt.close(fig)
+                    t_epoch, t_forward / batch_idx, t_backward / batch_idx, map_res.max()))
                 pass
+
+        if visualize:
+            fig = plt.figure()
+            subplt0 = fig.add_subplot(211, title="output")
+            subplt1 = fig.add_subplot(212, title="target")
+            subplt0.imshow(map_res.cpu().detach().numpy().squeeze())
+            subplt1.imshow(self.criterion._traget_transform(map_res, map_gt, data_loader.dataset.map_kernel)
+                           .cpu().detach().numpy().squeeze())
+            plt.savefig(os.path.join(self.logdir, 'map.jpg'))
+            plt.close(fig)
+
+            # visualizing the heatmap for per-view estimation
+            heatmap0 = imgs_res[0][0].detach().cpu().numpy().squeeze()
+            img0 = self.denormalize(data[0, 0]).cpu().numpy().squeeze().transpose([1, 2, 0])
+            img0 = Image.fromarray((img0 * 255).astype('uint8'))
+            plt.imshow(add_heatmap_to_image(heatmap0, img0))
+            plt.savefig(os.path.join(self.logdir, 'cam0.jpg'))
+            plt.close()
 
         t1 = time.time()
         t_epoch = t1 - t0
         print('Train Epoch: {}, Batch:{}, \tLoss: {:.6f}, '
-              'precision: {:.1f}%, Recall: {:.1f}%, \tTime: {:.3f}'.format(
+              'Precision: {:.1f}%, Recall: {:.1f}%, \tTime: {:.3f}'.format(
             epoch, len(data_loader), losses / len(data_loader), precision_s.avg * 100, recall_s.avg * 100, t_epoch))
 
         return losses / len(data_loader), precision_s.avg * 100
 
-    def test(self, test_loader, res_fpath=None, gt_fpath=None):
+    def test(self, data_loader, res_fpath=None, gt_fpath=None):
         self.model.eval()
         losses = 0
         precision_s, recall_s = AverageMeter(), AverageMeter()
         all_res_list = []
         if res_fpath is not None:
             assert gt_fpath is not None
-        for batch_idx, (data, map_gt, imgs_gt, frame) in enumerate(test_loader):
+        for batch_idx, (data, map_gt, imgs_gt, frame) in enumerate(data_loader):
             with torch.no_grad():
                 map_res, imgs_res = self.model(data)
             if res_fpath is not None:
                 map_grid_res = map_res.detach().cpu().squeeze()
                 v_s = map_grid_res[map_grid_res > self.cls_thres].unsqueeze(1)
                 grid_xy = (map_grid_res > self.cls_thres).nonzero()
-                all_res_list.append(torch.cat([torch.ones_like(v_s) * frame, grid_xy.float() * self.grid_reduce, v_s],
-                                              dim=1))
+                all_res_list.append(torch.cat([torch.ones_like(v_s) * frame, grid_xy.float() *
+                                               data_loader.dataset.grid_reduce, v_s], dim=1))
 
-            loss = self.criterion(map_res, map_gt.to(map_res.device))
+            loss = 0
             for img_res, img_gt in zip(imgs_res, imgs_gt):
-                loss += self.criterion(img_res, img_gt.to(img_res.device))
+                loss += self.criterion(img_res, img_gt.to(img_res.device), data_loader.dataset.img_kernel)
+            loss = self.criterion(map_res, map_gt.to(map_res.device), data_loader.dataset.map_kernel) + \
+                   loss / len(imgs_gt)
             losses += loss.item()
             pred = (map_res > self.cls_thres).int().to(map_gt.device)
             true_positive = (pred.eq(map_gt) * pred.eq(1)).sum().item()
@@ -132,11 +149,11 @@ class PerspectiveTrainer(BaseTrainer):
             print('moda: {:.1f}%, modp: {:.1f}%, precision: {:.1f}%, recall: {:.1f}%'.
                   format(moda, modp, precision, recall))
 
-        print('Test, Loss: {:.6f}, precision: {:.1f}%, Recall: {:.1f}%'.format(losses / (len(test_loader) + 1),
+        print('Test, Loss: {:.6f}, Precision: {:.1f}%, Recall: {:.1f}%'.format(losses / (len(data_loader) + 1),
                                                                                precision_s.avg * 100,
                                                                                recall_s.avg * 100))
 
-        return losses / len(test_loader), precision_s.avg * 100, moda
+        return losses / len(data_loader), precision_s.avg * 100, moda
 
 
 class BBOXTrainer(BaseTrainer):

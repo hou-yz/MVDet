@@ -16,6 +16,7 @@ from multiview_detector.loss.gaussian_mse import GaussianMSE
 from multiview_detector.model.persp_trans_detector import PerspTransDetector
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
+from multiview_detector.utils.image_utils import img_color_denormalize
 from multiview_detector.trainer import PerspectiveTrainer
 
 
@@ -31,14 +32,14 @@ def main():
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.1, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--lr', type=float, default=0.05, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--log_interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--resume', type=str, default=None)
     parser.add_argument('--visualize', action='store_true')
-    parser.add_argument('--seed', type=int, default=None, help='random seed (default: None)')
+    parser.add_argument('--seed', type=int, default=1, help='random seed (default: None)')
     args = parser.parse_args()
 
     # seed
@@ -54,6 +55,7 @@ def main():
     if 'wildtrack' in args.dataset:
         data_path = os.path.expanduser('~/Data/Wildtrack')
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         train_trans = T.Compose([T.Resize([720, 1280]), T.ToTensor(), normalize, ])
         # test_trans = T.Compose([T.ToTensor(), ])
         train_set = WildtrackFrame(data_path, train=True, transform=train_trans, grid_reduce=4)
@@ -90,7 +92,7 @@ def main():
                                                     epochs=args.epochs)
 
     # loss
-    criterion = GaussianMSE(train_set.kernel).cuda()
+    criterion = GaussianMSE().cuda()
 
     # draw curve
     x_epoch = []
@@ -100,7 +102,7 @@ def main():
     test_prec_s = []
     test_moda_s = []
 
-    trainer = PerspectiveTrainer(model, criterion, logdir, train_set.grid_reduce, args.cls_thres)
+    trainer = PerspectiveTrainer(model, criterion, logdir, denormalize, args.cls_thres)
 
     # learn
     if args.resume is None:
