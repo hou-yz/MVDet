@@ -17,6 +17,7 @@ from multiview_detector.utils.projection import *
 
 
 class WildtrackBBOX(VisionDataset):
+    # WILDTRACK has irregular denotion: H*W=480*1440, normally x would be \in [0,1440), not [0,480)
     def __init__(self, root, split='train', transform=T.Compose([T.Resize([256, 128]), T.ToTensor()]),
                  reID=False, train_ratio=0.9, np_ratio=3, force_download=False):
         super().__init__(root, transform=transform)

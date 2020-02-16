@@ -17,6 +17,7 @@ extrinsic_camera_matrix_filenames = ['extr_CVLab1.xml', 'extr_CVLab2.xml', 'extr
 
 
 class WildtrackFrame(VisionDataset):
+    # WILDTRACK has irregular denotion: H*W=480*1440, normally x would be \in [0,1440), not [0,480)
     def __init__(self, root, train=True, transform=ToTensor(), target_transform=ToTensor(),
                  reID=False, grid_reduce=4, img_reduce=4, train_ratio=0.9, force_download=False):
         super().__init__(root, transform=transform, target_transform=target_transform)
@@ -45,11 +46,13 @@ class WildtrackFrame(VisionDataset):
         self.intrinsic_matrices, self.extrinsic_matrices = zip(
             *[self.get_intrinsic_extrinsic_matrix(cam) for cam in range(self.num_cam)])
 
-        x, y = np.mgrid[-map_kernel_size:map_kernel_size + 1, -map_kernel_size:map_kernel_size + 1]
+        x, y = np.meshgrid(np.arange(-map_kernel_size, map_kernel_size + 1),
+                           np.arange(-map_kernel_size, map_kernel_size + 1))
         pos = np.stack([x, y], axis=2)
         self.map_kernel = multivariate_normal.pdf(pos, [0, 0], np.identity(2) * map_sigma)
         self.map_kernel = self.map_kernel / self.map_kernel.max()
-        x, y = np.mgrid[-img_kernel_size:img_kernel_size + 1, -img_kernel_size:img_kernel_size + 1]
+        x, y = np.meshgrid(np.arange(-img_kernel_size, img_kernel_size + 1),
+                           np.arange(-img_kernel_size, img_kernel_size + 1))
         pos = np.stack([x, y], axis=2)
         self.img_kernel = multivariate_normal.pdf(pos, [0, 0], np.identity(2) * img_sigma)
         self.img_kernel = self.img_kernel / self.img_kernel.max()

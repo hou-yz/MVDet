@@ -10,25 +10,25 @@ def get_worldcoord_from_imagecoord(image_coord, intrinsic_mat, extrinsic_mat):
     return world_coord
 
 
-def get_worldgrid_from_imagecoord(image_coord, intrinsic_mat, extrinsic_mat):
-    worldcoord2imgcoord_mat = intrinsic_mat @ np.delete(extrinsic_mat, 2, 1)
-    worldgrid2worldcoord_mat = np.array([[2.5, 0, -300], [0, 2.5, -900], [0, 0, 1]])
-    worldgrid2imgcoord_mat = worldcoord2imgcoord_mat @ worldgrid2worldcoord_mat
-    imgcoord2worldgrid_mat = np.linalg.inv(worldgrid2imgcoord_mat)
-    image_coord = np.concatenate([image_coord, np.ones([1, image_coord.shape[1]])], axis=0)
-    world_grid = (imgcoord2worldgrid_mat @ image_coord).squeeze()
-    world_grid = world_grid[:2] / world_grid[2]
-    return world_grid.round()
-
-
-def get_imagecoord_from_worldgrid(worldgrid, intrinsic_mat, extrinsic_mat):
-    worldcoord2imgcoord_mat = np.delete(intrinsic_mat @ extrinsic_mat, 2, 1)
-    worldgrid2worldcoord_mat = np.array([[2.5, 0, -300], [0, 2.5, -900], [0, 0, 1]])
-    worldgrid2imgcoord_mat = worldcoord2imgcoord_mat @ worldgrid2worldcoord_mat
-    worldgrid = np.append(worldgrid, [1])
-    imagecoord = (worldgrid2imgcoord_mat @ worldgrid[:, np.newaxis]).squeeze()
-    imagecoord = imagecoord[:2] / imagecoord[2]
-    return imagecoord
+# def get_worldgrid_from_imagecoord(image_coord, intrinsic_mat, extrinsic_mat):
+#     worldcoord2imgcoord_mat = intrinsic_mat @ np.delete(extrinsic_mat, 2, 1)
+#     worldgrid2worldcoord_mat = np.array([[2.5, 0, -300], [0, 2.5, -900], [0, 0, 1]])
+#     worldgrid2imgcoord_mat = worldcoord2imgcoord_mat @ worldgrid2worldcoord_mat
+#     imgcoord2worldgrid_mat = np.linalg.inv(worldgrid2imgcoord_mat)
+#     image_coord = np.concatenate([image_coord, np.ones([1, image_coord.shape[1]])], axis=0)
+#     world_grid = (imgcoord2worldgrid_mat @ image_coord).squeeze()
+#     world_grid = world_grid[:2] / world_grid[2]
+#     return world_grid.round()
+#
+#
+# def get_imagecoord_from_worldgrid(worldgrid, intrinsic_mat, extrinsic_mat):
+#     worldcoord2imgcoord_mat = np.delete(intrinsic_mat @ extrinsic_mat, 2, 1)
+#     worldgrid2worldcoord_mat = np.array([[2.5, 0, -300], [0, 2.5, -900], [0, 0, 1]])
+#     worldgrid2imgcoord_mat = worldcoord2imgcoord_mat @ worldgrid2worldcoord_mat
+#     worldgrid = np.append(worldgrid, [1])
+#     imagecoord = (worldgrid2imgcoord_mat @ worldgrid[:, np.newaxis]).squeeze()
+#     imagecoord = imagecoord[:2] / imagecoord[2]
+#     return imagecoord
 
 
 def get_imagecoord_from_worldcoord(world_coord, intrinsic_mat, extrinsic_mat):

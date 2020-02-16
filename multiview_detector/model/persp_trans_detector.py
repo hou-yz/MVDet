@@ -48,12 +48,12 @@ class PerspTransDetector(nn.Module):
         else:
             raise Exception
         # 2.5cm -> 0.5m: 20x
-        self.img_classifier = nn.Sequential(nn.Conv2d(out_channel, 32, 1), nn.ReLU(),
-                                            nn.Conv2d(32, 1, 1, bias=False)).to('cuda:0')
-        self.map_classifier = nn.Sequential(nn.Conv2d(out_channel * 7 + 2, 512, 1), nn.ReLU(),
+        self.img_classifier = nn.Sequential(nn.Conv2d(out_channel, 64, 1), nn.ReLU(),
+                                            nn.Conv2d(64, 1, 1, bias=False)).to('cuda:0')
+        self.map_classifier = nn.Sequential(nn.Conv2d(out_channel * 7 + 2, 512, 3, padding=1), nn.ReLU(),
                                             # nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
-                                            # nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
-                                            nn.Conv2d(512, 1, 1, bias=False)).to('cuda:0')
+                                            nn.Conv2d(512, 512, 3, padding=2, dilation=2), nn.ReLU(),
+                                            nn.Conv2d(512, 1, 3, padding=4, dilation=4, bias=False)).to('cuda:0')
         pass
 
     def forward(self, imgs, visualize=False):
