@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as T
-from multiview_detector.dataset.wildtrack_frame import WildtrackFrame
+from multiview_detector.dataset import *
 from multiview_detector.loss.gaussian_mse import GaussianMSE
 from multiview_detector.model.persp_trans_detector import PerspTransDetector
 from multiview_detector.utils.logger import Logger
@@ -58,8 +58,9 @@ def main():
         denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         train_trans = T.Compose([T.Resize([720, 1280]), T.ToTensor(), normalize, ])
         # test_trans = T.Compose([T.ToTensor(), ])
-        train_set = WildtrackFrame(data_path, train=True, transform=train_trans, grid_reduce=4)
-        test_set = WildtrackFrame(data_path, train=False, transform=train_trans, grid_reduce=4)
+        wildtrack = Wildtrack(data_path)
+        train_set = frameDataset(wildtrack, train=True, transform=train_trans, grid_reduce=4)
+        test_set = frameDataset(wildtrack, train=False, transform=train_trans, grid_reduce=4)
     else:
         raise Exception
 

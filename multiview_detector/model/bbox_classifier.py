@@ -33,14 +33,15 @@ class BBOXClassifier(nn.Module):
 
 
 def test():
-    from multiview_detector.dataset.wildtrack_bbox import WildtrackBBOX
+    from multiview_detector.dataset.bboxDataset import bboxDataset
+    from multiview_detector.dataset.Wildtrack import Wildtrack
     import torchvision.transforms as T
     from torch.utils.data import DataLoader
 
     transform = T.Compose([T.Resize([256, 128]),  # H,W
                            T.ToTensor(),
                            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset = WildtrackBBOX(os.path.expanduser('~/Data/Wildtrack'), transform=transform)
+    dataset = bboxDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')), transform=transform)
     dataloader = DataLoader(dataset, 64, True, num_workers=0)
     imgs, gt, _ = next(iter(dataloader))
     model = BBOXClassifier(dataset.num_cam)

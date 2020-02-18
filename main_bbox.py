@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as T
-from multiview_detector.dataset.wildtrack_bbox import WildtrackBBOX
+from multiview_detector.dataset import *
 from multiview_detector.model.bbox_classifier import BBOXClassifier
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
@@ -57,9 +57,9 @@ def main():
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         train_trans = T.Compose([T.Resize([256, 128]), T.ToTensor(), normalize, ])
         test_trans = T.Compose([T.Resize([256, 128]), T.ToTensor(), normalize, ])
-        train_set = WildtrackBBOX(data_path, split='train', transform=train_trans)
-        val_set = WildtrackBBOX(data_path, split='val', transform=test_trans)  # ,train_ratio=0.9975
-        test_set = WildtrackBBOX(data_path, split=args.test_type, transform=test_trans)  # ,train_ratio=0.9975
+        train_set = bboxDataset(Wildtrack(data_path), split='train', transform=train_trans)
+        val_set = bboxDataset(Wildtrack(data_path), split='val', transform=test_trans)  # ,train_ratio=0.9975
+        test_set = bboxDataset(Wildtrack(data_path), split=args.test_type, transform=test_trans)
     else:
         raise Exception
 

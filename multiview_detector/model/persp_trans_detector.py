@@ -17,9 +17,9 @@ class PerspTransDetector(nn.Module):
         super().__init__()
         self.num_cam = dataset.num_cam
         self.img_shape, self.reducedgrid_shape = dataset.img_shape, dataset.reducedgrid_shape
-        intrinsic_matrices, extrinsic_matrices = zip(*[dataset.get_intrinsic_extrinsic_matrix(cam)
-                                                       for cam in range(dataset.num_cam)])
-        imgcoord2worldgrid_matrices = self.get_imgcoord2worldgrid_matrices(intrinsic_matrices, extrinsic_matrices)
+        imgcoord2worldgrid_matrices = self.get_imgcoord2worldgrid_matrices(dataset.base.intrinsic_matrices,
+                                                                           dataset.base.extrinsic_matrices,
+                                                                           dataset.base.worldgrid2worldcoord_mat)
         self.coord_map = self.create_coord_map(self.reducedgrid_shape + [1])
         # img
         self.upsample_shape = list(map(lambda x: int(x / dataset.img_reduce), self.img_shape))
@@ -79,11 +79,11 @@ class PerspTransDetector(nn.Module):
         map_result = F.interpolate(map_result, self.reducedgrid_shape, mode='bilinear')
         return map_result, imgs_result
 
-    def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices):
+    def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):
         projection_matrices = {}
         for cam in range(self.num_cam):
             worldcoord2imgcoord_mat = intrinsic_matrices[cam] @ np.delete(extrinsic_matrices[cam], 2, 1)
-            worldgrid2worldcoord_mat = np.array([[2.5, 0, -300], [0, 2.5, -900], [0, 0, 1]])
+
             worldgrid2imgcoord_mat = worldcoord2imgcoord_mat @ worldgrid2worldcoord_mat
             imgcoord2worldgrid_mat = np.linalg.inv(worldgrid2imgcoord_mat)
             # image of shape C,H,W (C,N_row,N_col); indexed as x,y,w,h (x,y,n_col,n_row)
@@ -106,14 +106,15 @@ class PerspTransDetector(nn.Module):
 
 
 def test():
-    from multiview_detector.dataset.wildtrack_frame import WildtrackFrame
+    from multiview_detector.dataset.frameDataset import frameDataset
+    from multiview_detector.dataset.Wildtrack import Wildtrack
     import torchvision.transforms as T
     from torch.utils.data import DataLoader
 
     transform = T.Compose([T.Resize([720, 1280]),  # H,W
                            T.ToTensor(),
                            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset = WildtrackFrame(os.path.expanduser('~/Data/Wildtrack'), transform=transform)
+    dataset = frameDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')), transform=transform)
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
     imgs, map_gt, imgs_gt, frame = next(iter(dataloader))
     model = PerspTransDetector(dataset)
