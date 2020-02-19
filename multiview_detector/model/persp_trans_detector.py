@@ -108,13 +108,14 @@ class PerspTransDetector(nn.Module):
 def test():
     from multiview_detector.dataset.frameDataset import frameDataset
     from multiview_detector.dataset.Wildtrack import Wildtrack
+    from multiview_detector.dataset.MultiviewX import MultiviewX
     import torchvision.transforms as T
     from torch.utils.data import DataLoader
 
     transform = T.Compose([T.Resize([720, 1280]),  # H,W
                            T.ToTensor(),
                            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset = frameDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')), transform=transform)
+    dataset = frameDataset(MultiviewX(os.path.expanduser('~/Data/MultiviewX')), transform=transform)
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
     imgs, map_gt, imgs_gt, frame = next(iter(dataloader))
     model = PerspTransDetector(dataset)

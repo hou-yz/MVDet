@@ -74,8 +74,12 @@ class frameDataset(VisionDataset):
                                                 [[] for _ in range(self.num_cam)]
                 for single_pedestrian in all_pedestrians:
                     x, y = self.base.get_worldgrid_from_pos(single_pedestrian['positionID'])
-                    i_s.append(int(x / self.grid_reduce))
-                    j_s.append(int(y / self.grid_reduce))
+                    if self.base.indexing == 'xy':
+                        i_s.append(int(y / self.grid_reduce))
+                        j_s.append(int(x / self.grid_reduce))
+                    else:
+                        i_s.append(int(x / self.grid_reduce))
+                        j_s.append(int(y / self.grid_reduce))
                     v_s.append(single_pedestrian['personID'] + 1 if self.reID else 1)
                     for cam in range(self.num_cam):
                         x = min(int((single_pedestrian['views'][cam]['xmin'] +
@@ -123,24 +127,29 @@ class frameDataset(VisionDataset):
 
 def test():
     from multiview_detector.dataset.Wildtrack import Wildtrack
+    from multiview_detector.dataset.MultiviewX import MultiviewX
     from multiview_detector.utils.projection import get_worldcoord_from_imagecoord
-    dataset = frameDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')))
+    dataset = frameDataset(MultiviewX(os.path.expanduser('~/Data/MultiviewX')))
     # test projection
     world_grid_maps = []
     xx, yy = np.meshgrid(np.arange(0, 1920, 20), np.arange(0, 1080, 20))
     H, W = xx.shape
     image_coords = np.stack([xx, yy], axis=2).reshape([-1, 2])
     import matplotlib.pyplot as plt
-    for cam in range(7):
+    for cam in range(dataset.num_cam):
         world_coords = get_worldcoord_from_imagecoord(image_coords.transpose(), dataset.base.intrinsic_matrices[cam],
                                                       dataset.base.extrinsic_matrices[cam])
         world_grids = dataset.base.get_worldgrid_from_worldcoord(world_coords).transpose().reshape([H, W, 2])
-        world_grid_map = np.zeros([480, 1440])
+        world_grid_map = np.zeros(dataset.worldgrid_shape)
         for i in range(H):
             for j in range(W):
                 x, y = world_grids[i, j]
-                if x in range(480) and y in range(1440):
-                    world_grid_map[int(x), int(y)] += 1
+                if dataset.base.indexing == 'xy':
+                    if x in range(dataset.worldgrid_shape[1]) and y in range(dataset.worldgrid_shape[0]):
+                        world_grid_map[int(y), int(x)] += 1
+                else:
+                    if x in range(dataset.worldgrid_shape[0]) and y in range(dataset.worldgrid_shape[1]):
+                        world_grid_map[int(x), int(y)] += 1
         world_grid_map = world_grid_map != 0
         plt.imshow(world_grid_map)
         plt.show()

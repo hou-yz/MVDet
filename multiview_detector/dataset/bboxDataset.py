@@ -36,7 +36,9 @@ class bboxDataset(VisionDataset):
             self.prepare_gt()
 
         self.fpath_by_index = []
-        frame_folders = ['frame1800', 'frame1805'] if self.split == 'val' else sorted(os.listdir(self.fpath_header))
+        frame_folders = sorted(os.listdir(self.fpath_header))
+        if self.split == 'val':
+            frame_folders = frame_folders[:2]
         for frame_folder in frame_folders:
             for pos_folder in sorted(os.listdir(os.path.join(self.fpath_header, frame_folder))):
                 self.fpath_by_index.append(os.path.join(frame_folder, pos_folder))
@@ -127,7 +129,7 @@ class bboxDataset(VisionDataset):
                     left, top, right, bottom = bbox_by_pos_cam[pos][cam]
                     img = img.crop([left, top, right, bottom])
                 else:
-                    img = Image.fromarray(np.zeros([256, 128, 3], np.uint8))
+                    img = Image.fromarray(np.zeros([4, 4, 3], np.uint8))
                     pass
                 fname = self.fpath_header + \
                         '/frame{:04d}/pos{:06d}_pid{:03d}/cam{:d}.jpg'.format(frame, pos, pid, cam)
@@ -170,8 +172,8 @@ class bboxDataset(VisionDataset):
 
 def test():
     from multiview_detector.dataset.Wildtrack import Wildtrack
-    # read_pom(os.path.expanduser('~/Data/Wildtrack/rectangles.pom'))
-    dataset = bboxDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')), split='val', )  # force_download=True
+    from multiview_detector.dataset.MultiviewX import MultiviewX
+    dataset = bboxDataset(MultiviewX(os.path.expanduser('~/Data/MultiviewX')), split='val', force_download=True)  #
     imgs, gt, _ = dataset.__getitem__(1, True)
     pass
 
