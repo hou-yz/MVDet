@@ -7,12 +7,12 @@ import kornia
 from torchvision.models.alexnet import alexnet
 from torchvision.models.vgg import vgg11
 from torchvision.models.mobilenet import mobilenet_v2
-from multiview_detector.model.resnet import resnet18, resnet50
+from multiview_detector.models.resnet import resnet18, resnet50
 
 import matplotlib.pyplot as plt
 
 
-class PerspTransDetector(nn.Module):
+class ResProjVariant(nn.Module):
     def __init__(self, dataset, arch='resnet18'):
         super().__init__()
         self.num_cam = dataset.num_cam
@@ -50,7 +50,7 @@ class PerspTransDetector(nn.Module):
         # 2.5cm -> 0.5m: 20x
         self.img_classifier = nn.Sequential(nn.Conv2d(out_channel, 64, 1), nn.ReLU(),
                                             nn.Conv2d(64, 1, 1, bias=False)).to('cuda:0')
-        self.map_classifier = nn.Sequential(nn.Conv2d(out_channel * 7 + 2, 512, 3, padding=1), nn.ReLU(),
+        self.map_classifier = nn.Sequential(nn.Conv2d(self.num_cam + 2, 512, 3, padding=1), nn.ReLU(),
                                             # nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),
                                             nn.Conv2d(512, 512, 3, padding=2, dilation=2), nn.ReLU(),
                                             nn.Conv2d(512, 1, 3, padding=4, dilation=4, bias=False)).to('cuda:0')
@@ -68,7 +68,7 @@ class PerspTransDetector(nn.Module):
             img_res = self.img_classifier(img_feature.to('cuda:0'))
             imgs_result.append(img_res)
             proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:0')
-            world_feature = kornia.warp_perspective(img_feature.to('cuda:0'), proj_mat, self.reducedgrid_shape)
+            world_feature = kornia.warp_perspective(img_res.to('cuda:0'), proj_mat, self.reducedgrid_shape)
             if visualize:
                 plt.imshow(world_feature[0, 0].detach().cpu().numpy())
                 plt.show()
@@ -106,9 +106,9 @@ class PerspTransDetector(nn.Module):
 
 
 def test():
-    from multiview_detector.dataset.frameDataset import frameDataset
-    from multiview_detector.dataset.Wildtrack import Wildtrack
-    from multiview_detector.dataset.MultiviewX import MultiviewX
+    from multiview_detector.datasets.frameDataset import frameDataset
+    from multiview_detector.datasets.Wildtrack import Wildtrack
+    from multiview_detector.datasets.MultiviewX import MultiviewX
     import torchvision.transforms as T
     from torch.utils.data import DataLoader
 
@@ -118,7 +118,7 @@ def test():
     dataset = frameDataset(MultiviewX(os.path.expanduser('~/Data/MultiviewX')), transform=transform)
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
     imgs, map_gt, imgs_gt, frame = next(iter(dataloader))
-    model = PerspTransDetector(dataset)
+    model = ResProjVariant(dataset)
     map_res, img_res = model(imgs, visualize=True)
     pass
 

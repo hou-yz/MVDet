@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+from PIL import Image
 import torch
 
 
@@ -12,12 +13,13 @@ class img_color_denormalize(object):
         return tensor * self.std.to(tensor.device) + self.mean.to(tensor.device)
 
 
-def add_heatmap_to_image(heatmap, image, ratio=0.5):
+def add_heatmap_to_image(heatmap, image):
     heatmap = heatmap - heatmap.min()
-    heatmap = heatmap / heatmap.max()
+    heatmap = heatmap / (heatmap.max() + 1e-8)
     heatmap = np.uint8(255 * heatmap)
     heatmap = cv2.resize(heatmap, (image.size))
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
-    downsampled_img = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
-    cam_result = np.uint8(heatmap * (1 - ratio) * 0.6 + downsampled_img * ratio)
+    image = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
+    cam_result = np.uint8(heatmap * 0.3 + image * 0.5)
+    cam_result = Image.fromarray(cv2.cvtColor(cam_result, cv2.COLOR_BGR2RGB))
     return cam_result

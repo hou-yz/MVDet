@@ -1,17 +1,29 @@
-function detResults=evaluateDetection(res_fpath,gt_fpath)
+function detResults=evaluateDetection(res_fpath,gt_fpath, chlname)
 %% evaluate detections using P. Dollar's script
 
-chlname = 'WildTrack';
+
 
 if contains(res_fpath,'train')
     splitStrLong='Training Set';
-    frames = 0:5:1795;
+    if strcmpi(chlname,'wildtrack')
+        frames = 0:5:1795;
+    elseif strcmpi(chlname,'multiviewx')
+        frames = 0:359;
+    end
 elseif contains(res_fpath,'val')
     splitStrLong='Validation Set';
-    frames = [1800,1805];
+    if strcmpi(chlname,'wildtrack')
+        frames = [1800,1805];
+    elseif strcmpi(chlname,'multiviewx')
+        frames = [360,361];
+    end
 elseif contains(res_fpath,'test')
     splitStrLong='Test Set';
-    frames = 1800:5:1995;
+    if strcmpi(chlname,'wildtrack')
+        frames = 1800:5:1995;
+    elseif strcmpi(chlname,'multiviewx')
+        frames = 360:399;
+    end
 end
 
 addpath(genpath('.'));
@@ -45,6 +57,9 @@ detAllMatrix=zeros(0,4);
     % if something (a result) is missing, we cannot evaluate this tracker
     detRaw=readtable(res_fpath);
     detRaw=detRaw{:,:};
+    if isempty(detRaw)
+        detRaw = [frames',ones(length(frames),2).*inf];
+    end
     
     % 
     detOne = {};

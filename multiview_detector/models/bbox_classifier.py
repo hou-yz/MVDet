@@ -2,8 +2,8 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
-from multiview_detector.model.vgg import vgg11
-from multiview_detector.model.resnet import resnet18, resnet50
+from multiview_detector.models.vgg import vgg11
+from multiview_detector.models.resnet import resnet18, resnet50
 
 
 class BBOXClassifier(nn.Module):
@@ -33,8 +33,8 @@ class BBOXClassifier(nn.Module):
 
 
 def test():
-    from multiview_detector.dataset.bboxDataset import bboxDataset
-    from multiview_detector.dataset.Wildtrack import Wildtrack
+    from multiview_detector.datasets.bboxDataset import bboxDataset
+    from multiview_detector.datasets.Wildtrack import Wildtrack
     import torchvision.transforms as T
     from torch.utils.data import DataLoader
 

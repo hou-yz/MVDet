@@ -8,12 +8,13 @@ from distutils.dir_util import copy_tree
 import datetime
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as T
-from multiview_detector.dataset import *
+from multiview_detector.datasets import *
 from multiview_detector.loss.gaussian_mse import GaussianMSE
-from multiview_detector.model.persp_trans_detector import PerspTransDetector
+from multiview_detector.models.persp_trans_detector import PerspTransDetector
+from multiview_detector.models.image_proj_variant import ImageProjVariant
+from multiview_detector.models.res_proj_variant import ResProjVariant
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
 from multiview_detector.utils.image_utils import img_color_denormalize
@@ -25,14 +26,15 @@ def main():
     parser = argparse.ArgumentParser(description='Multiview detector')
     parser.add_argument('--reID', action='store_true')
     parser.add_argument('--cls_thres', type=float, default=0.4)
+    parser.add_argument('--alpha', type=float, default=1.0, help='ratio for per view loss')
+    parser.add_argument('--variants', type=str, default='default', choices=['default', 'img_proj', 'res_proj'])
     parser.add_argument('--arch', type=str, default='resnet18', choices=['vgg11', 'resnet18'])
-    parser.add_argument('-d', '--dataset', type=str, default='wildtrack_frame', choices=['wildtrack_frame'])
-    parser.add_argument('--test_type', type=str, default='test', choices=['val', 'test'])
+    parser.add_argument('-d', '--dataset', type=str, default='wildtrack', choices=['wildtrack','multiviewX'])
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=1, metavar='N',
                         help='input batch size for training (default: 1)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.05, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--lr', type=float, default=0.1, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--log_interval', type=int, default=10, metavar='N',
@@ -52,26 +54,44 @@ def main():
         torch.backends.cudnn.benchmark = True
 
     # dataset
+    normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+    denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+    train_trans = T.Compose([T.Resize([720, 1280]), T.ToTensor(), normalize, ])
     if 'wildtrack' in args.dataset:
         data_path = os.path.expanduser('~/Data/Wildtrack')
-        normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-        denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-        train_trans = T.Compose([T.Resize([720, 1280]), T.ToTensor(), normalize, ])
-        # test_trans = T.Compose([T.ToTensor(), ])
-        wildtrack = Wildtrack(data_path)
-        train_set = frameDataset(wildtrack, train=True, transform=train_trans, grid_reduce=4)
-        test_set = frameDataset(wildtrack, train=False, transform=train_trans, grid_reduce=4)
+        base = Wildtrack(data_path)
+    elif 'multiviewX' in args.dataset:
+        data_path = os.path.expanduser('~/Data/MultiviewX')
+        base = MultiviewX(data_path)
     else:
         raise Exception
-
-    # network specific setting
+    train_set = frameDataset(base, train=True, transform=train_trans, grid_reduce=4)
+    test_set = frameDataset(base, train=False, transform=train_trans, grid_reduce=4)
 
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
                                               num_workers=args.num_workers, pin_memory=True)
 
-    logdir = f'logs/{args.dataset}/' + datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S') \
+    # model
+    if args.variants == 'default':
+        model = PerspTransDetector(train_set, args.arch)
+    elif args.variants == 'img_proj':
+        model = ImageProjVariant(train_set, args.arch)
+    elif args.variants == 'res_proj':
+        model = ResProjVariant(train_set, args.arch)
+    else:
+        raise Exception
+
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, steps_per_epoch=len(train_loader),
+                                                    epochs=args.epochs)
+
+    # loss
+    criterion = GaussianMSE().cuda()
+
+    # logging
+    logdir = f'logs/{args.dataset}_frame/' + datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S') \
         if not args.resume else f'logs/{args.dataset}/{args.resume}'
     if args.resume is None:
         os.makedirs(logdir, exist_ok=True)
@@ -84,17 +104,6 @@ def main():
     print('Settings:')
     print(vars(args))
 
-    # model
-    model = PerspTransDetector(train_set, args.arch)
-    # model = nn.DataParallel(model)
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 5, 1)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, steps_per_epoch=len(train_loader),
-                                                    epochs=args.epochs)
-
-    # loss
-    criterion = GaussianMSE().cuda()
-
     # draw curve
     x_epoch = []
     train_loss_s = []
@@ -103,19 +112,19 @@ def main():
     test_prec_s = []
     test_moda_s = []
 
-    trainer = PerspectiveTrainer(model, criterion, logdir, denormalize, args.cls_thres)
+    trainer = PerspectiveTrainer(model, criterion, logdir, denormalize, args.cls_thres, args.alpha)
 
     # learn
     if args.resume is None:
-        # print('Testing...')
-        # trainer.test(test_loader, os.path.join(logdir, f'{args.test_type}.txt'), train_set.gt_fpath)
+        print('Testing...')
+        trainer.test(test_loader, os.path.join(logdir, 'test.txt'), train_set.gt_fpath, True)
 
         for epoch in range(1, args.epochs + 1):
             print('Training...')
-            train_loss, train_prec = trainer.train(epoch, train_loader, optimizer, args.log_interval, scheduler, True)
+            train_loss, train_prec = trainer.train(epoch, train_loader, optimizer, args.log_interval, scheduler)
             print('Testing...')
-            test_loss, test_prec, moda = trainer.test(test_loader, os.path.join(logdir, f'{args.test_type}.txt'),
-                                                      train_set.gt_fpath)
+            test_loss, test_prec, moda = trainer.test(test_loader, os.path.join(logdir, 'test.txt'),
+                                                      train_set.gt_fpath, True)
 
             x_epoch.append(epoch)
             train_loss_s.append(train_loss)
@@ -133,7 +142,7 @@ def main():
         model.load_state_dict(torch.load(resume_fname))
         model.eval()
     print('Test loaded model...')
-    trainer.test(test_loader, os.path.join(logdir, f'{args.test_type}.txt'), train_set.gt_fpath)
+    trainer.test(test_loader, os.path.join(logdir, 'test.txt'), train_set.gt_fpath, True)
 
 
 if __name__ == '__main__':

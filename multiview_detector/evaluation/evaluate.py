@@ -5,13 +5,13 @@ import matlab.engine
 from multiview_detector.utils.nms import nms
 
 
-def matlab_eval(res_fpath, gt_fpath):
+def matlab_eval(res_fpath, gt_fpath, dataset='wildtrack'):
     # os.system(f'matlab -nosplash -nodesktop -nojvm -r \"'
     #           f'cd ./multiview_detector/evaluation/motchallenge-devkit; '
     #           f'try evaluateDetection(\'{res_fpath}\',\'{gt_fpath}\'); catch; end; quit\"')
     eng = matlab.engine.start_matlab()
     eng.cd('./multiview_detector/evaluation/motchallenge-devkit')
-    res = eng.evaluateDetection(res_fpath, gt_fpath)
+    res = eng.evaluateDetection(res_fpath, gt_fpath, dataset)
     recall, precision, moda, modp = np.array(res['detMets']).squeeze()[[0, 1, -2, -1]]
     return recall, precision, moda, modp
 
@@ -29,4 +29,4 @@ if __name__ == "__main__":
     res_list = torch.cat(res_list, dim=0).numpy()
     np.savetxt(res_fpath, res_list, '%d')
 
-    matlab_eval(res_fpath, gt_fpath)
+    matlab_eval(res_fpath, gt_fpath, 'wildtrack')

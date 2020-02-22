@@ -11,8 +11,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.transforms as T
-from multiview_detector.dataset import *
-from multiview_detector.model.bbox_classifier import BBOXClassifier
+from multiview_detector.datasets import *
+from multiview_detector.models.bbox_classifier import BBOXClassifier
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
 from multiview_detector.trainer import BBOXTrainer
@@ -87,7 +87,6 @@ def main():
 
     # model
     model = BBOXClassifier(train_set.num_cam, args.arch).cuda()
-    # model = nn.DataParallel(model)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 20, 1)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
@@ -132,7 +131,7 @@ def main():
         model.eval()
     print('Test loaded model...')
     trainer.test(test_loader, res_fpath=os.path.join(logdir, f'{args.test_type}.txt'))
-    matlab_eval(os.path.abspath(os.path.join(logdir, f'{args.test_type}.txt')), os.path.abspath(test_set.gt_fpath))
+    matlab_eval(os.path.abspath(os.path.join(logdir, f'{args.test_type}.txt')), os.path.abspath(test_set.gt_fpath), test_set.base.__name__)
     pass
 
 

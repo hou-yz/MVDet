@@ -2,9 +2,9 @@ import time
 import torch
 import os
 import numpy as np
-import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import cv2
 from PIL import Image
 from multiview_detector.evaluation.evaluate import matlab_eval
 from multiview_detector.utils.nms import nms
@@ -18,15 +18,16 @@ class BaseTrainer(object):
 
 
 class PerspectiveTrainer(BaseTrainer):
-    def __init__(self, model, criterion, logdir, denormalize, cls_thres=0.4):
+    def __init__(self, model, criterion, logdir, denormalize, cls_thres=0.4, alpha=1.0):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
         self.cls_thres = cls_thres
         self.logdir = logdir
         self.denormalize = denormalize
+        self.alpha = alpha
 
-    def train(self, epoch, data_loader, optimizer, log_interval=100, cyclic_scheduler=None, visualize=False):
+    def train(self, epoch, data_loader, optimizer, log_interval=100, cyclic_scheduler=None):
         self.model.train()
         losses = 0
         precision_s, recall_s = AverageMeter(), AverageMeter()
@@ -43,7 +44,7 @@ class PerspectiveTrainer(BaseTrainer):
             for img_res, img_gt in zip(imgs_res, imgs_gt):
                 loss += self.criterion(img_res, img_gt.to(img_res.device), data_loader.dataset.img_kernel)
             loss = self.criterion(map_res, map_gt.to(map_res.device), data_loader.dataset.map_kernel) + \
-                   loss / len(imgs_gt)
+                   loss / len(imgs_gt) * self.alpha
             loss.backward()
             optimizer.step()
             losses += loss.item()
@@ -74,24 +75,6 @@ class PerspectiveTrainer(BaseTrainer):
                     t_epoch, t_forward / batch_idx, t_backward / batch_idx, map_res.max()))
                 pass
 
-        if visualize:
-            fig = plt.figure()
-            subplt0 = fig.add_subplot(211, title="output")
-            subplt1 = fig.add_subplot(212, title="target")
-            subplt0.imshow(map_res.cpu().detach().numpy().squeeze())
-            subplt1.imshow(self.criterion._traget_transform(map_res, map_gt, data_loader.dataset.map_kernel)
-                           .cpu().detach().numpy().squeeze())
-            plt.savefig(os.path.join(self.logdir, 'map.jpg'))
-            plt.close(fig)
-
-            # visualizing the heatmap for per-view estimation
-            heatmap0 = imgs_res[0][0].detach().cpu().numpy().squeeze()
-            img0 = self.denormalize(data[0, 0]).cpu().numpy().squeeze().transpose([1, 2, 0])
-            img0 = Image.fromarray((img0 * 255).astype('uint8'))
-            plt.imshow(add_heatmap_to_image(heatmap0, img0))
-            plt.savefig(os.path.join(self.logdir, 'cam0.jpg'))
-            plt.close()
-
         t1 = time.time()
         t_epoch = t1 - t0
         print('Train Epoch: {}, Batch:{}, \tLoss: {:.6f}, '
@@ -100,7 +83,7 @@ class PerspectiveTrainer(BaseTrainer):
 
         return losses / len(data_loader), precision_s.avg * 100
 
-    def test(self, data_loader, res_fpath=None, gt_fpath=None):
+    def test(self, data_loader, res_fpath=None, gt_fpath=None, visualize=False):
         self.model.eval()
         losses = 0
         precision_s, recall_s = AverageMeter(), AverageMeter()
@@ -121,7 +104,7 @@ class PerspectiveTrainer(BaseTrainer):
             for img_res, img_gt in zip(imgs_res, imgs_gt):
                 loss += self.criterion(img_res, img_gt.to(img_res.device), data_loader.dataset.img_kernel)
             loss = self.criterion(map_res, map_gt.to(map_res.device), data_loader.dataset.map_kernel) + \
-                   loss / len(imgs_gt)
+                   loss / len(imgs_gt) * self.alpha
             losses += loss.item()
             pred = (map_res > self.cls_thres).int().to(map_gt.device)
             true_positive = (pred.eq(map_gt) * pred.eq(1)).sum().item()
@@ -131,6 +114,23 @@ class PerspectiveTrainer(BaseTrainer):
             recall = true_positive / (true_positive + false_negative + 1e-4)
             precision_s.update(precision)
             recall_s.update(recall)
+
+        if visualize:
+            fig = plt.figure()
+            subplt0 = fig.add_subplot(211, title="output")
+            subplt1 = fig.add_subplot(212, title="target")
+            subplt0.imshow(map_res.cpu().detach().numpy().squeeze())
+            subplt1.imshow(self.criterion._traget_transform(map_res, map_gt, data_loader.dataset.map_kernel)
+                           .cpu().detach().numpy().squeeze())
+            plt.savefig(os.path.join(self.logdir, 'map.jpg'))
+            plt.close(fig)
+
+            # visualizing the heatmap for per-view estimation
+            heatmap0 = imgs_res[0][0].detach().cpu().numpy().squeeze()
+            img0 = self.denormalize(data[0, 0]).cpu().numpy().squeeze().transpose([1, 2, 0])
+            img0 = Image.fromarray((img0 * 255).astype('uint8'))
+            cam_result = add_heatmap_to_image(heatmap0, img0)
+            cam_result.save(os.path.join(self.logdir, 'cam1.jpg'))
 
         moda = 0
         if res_fpath is not None:
@@ -145,7 +145,8 @@ class PerspectiveTrainer(BaseTrainer):
             res_list = torch.cat(res_list, dim=0).numpy() if res_list else np.empty([0, 3])
             np.savetxt(res_fpath, res_list, '%d')
 
-            recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath))
+            recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
+                                                        data_loader.dataset.base.__name__)
             print('moda: {:.1f}%, modp: {:.1f}%, precision: {:.1f}%, recall: {:.1f}%'.
                   format(moda, modp, precision, recall))
 

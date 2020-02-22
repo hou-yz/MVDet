@@ -171,8 +171,8 @@ class bboxDataset(VisionDataset):
 
 
 def test():
-    from multiview_detector.dataset.Wildtrack import Wildtrack
-    from multiview_detector.dataset.MultiviewX import MultiviewX
+    from multiview_detector.datasets.Wildtrack import Wildtrack
+    from multiview_detector.datasets.MultiviewX import MultiviewX
     dataset = bboxDataset(MultiviewX(os.path.expanduser('~/Data/MultiviewX')), split='val', force_download=True)  #
     imgs, gt, _ = dataset.__getitem__(1, True)
     pass

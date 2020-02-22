@@ -11,7 +11,7 @@ from multiview_detector.utils.projection import *
 
 class frameDataset(VisionDataset):
     def __init__(self, base, train=True, transform=ToTensor(), target_transform=ToTensor(),
-                 reID=False, grid_reduce=4, img_reduce=4, train_ratio=0.9, force_download=False):
+                 reID=False, grid_reduce=4, img_reduce=4, train_ratio=0.9, force_download=True):
         super().__init__(base.root, transform=transform, target_transform=target_transform)
 
         map_sigma, map_kernel_size = 20 / grid_reduce, 20
@@ -126,8 +126,8 @@ class frameDataset(VisionDataset):
 
 
 def test():
-    from multiview_detector.dataset.Wildtrack import Wildtrack
-    from multiview_detector.dataset.MultiviewX import MultiviewX
+    from multiview_detector.datasets.Wildtrack import Wildtrack
+    from multiview_detector.datasets.MultiviewX import MultiviewX
     from multiview_detector.utils.projection import get_worldcoord_from_imagecoord
     dataset = frameDataset(MultiviewX(os.path.expanduser('~/Data/MultiviewX')))
     # test projection
