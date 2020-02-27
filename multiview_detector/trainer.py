@@ -96,7 +96,11 @@ class PerspectiveTrainer(BaseTrainer):
             if res_fpath is not None:
                 map_grid_res = map_res.detach().cpu().squeeze()
                 v_s = map_grid_res[map_grid_res > self.cls_thres].unsqueeze(1)
-                grid_xy = (map_grid_res > self.cls_thres).nonzero()
+                grid_ij = (map_grid_res > self.cls_thres).nonzero()
+                if data_loader.dataset.base.indexing == 'xy':
+                    grid_xy = grid_ij[:, [1, 0]]
+                else:
+                    grid_xy = grid_ij
                 all_res_list.append(torch.cat([torch.ones_like(v_s) * frame, grid_xy.float() *
                                                data_loader.dataset.grid_reduce, v_s], dim=1))
 
@@ -140,7 +144,7 @@ class PerspectiveTrainer(BaseTrainer):
             for frame in np.unique(all_res_list[:, 0]):
                 res = all_res_list[all_res_list[:, 0] == frame, :]
                 positions, scores = res[:, 1:3], res[:, 3]
-                ids, count = nms(positions, scores, 25, 600)
+                ids, count = nms(positions, scores, 20, 600)
                 res_list.append(torch.cat([torch.ones([count, 1]) * frame, positions[ids[:count], :]], dim=1))
             res_list = torch.cat(res_list, dim=0).numpy() if res_list else np.empty([0, 3])
             np.savetxt(res_fpath, res_list, '%d')

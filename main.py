@@ -27,7 +27,7 @@ def main():
     parser.add_argument('--reID', action='store_true')
     parser.add_argument('--cls_thres', type=float, default=0.4)
     parser.add_argument('--alpha', type=float, default=1.0, help='ratio for per view loss')
-    parser.add_argument('--variants', type=str, default='default', choices=['default', 'img_proj', 'res_proj'])
+    parser.add_argument('--variant', type=str, default='default', choices=['default', 'img_proj', 'res_proj'])
     parser.add_argument('--arch', type=str, default='resnet18', choices=['vgg11', 'resnet18'])
     parser.add_argument('-d', '--dataset', type=str, default='wildtrack', choices=['wildtrack','multiviewX'])
     parser.add_argument('-j', '--num_workers', type=int, default=4)
@@ -74,11 +74,11 @@ def main():
                                               num_workers=args.num_workers, pin_memory=True)
 
     # model
-    if args.variants == 'default':
+    if args.variant == 'default':
         model = PerspTransDetector(train_set, args.arch)
-    elif args.variants == 'img_proj':
+    elif args.variant == 'img_proj':
         model = ImageProjVariant(train_set, args.arch)
-    elif args.variants == 'res_proj':
+    elif args.variant == 'res_proj':
         model = ResProjVariant(train_set, args.arch)
     else:
         raise Exception
@@ -92,7 +92,7 @@ def main():
 
     # logging
     logdir = f'logs/{args.dataset}_frame/' + datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S') \
-        if not args.resume else f'logs/{args.dataset}/{args.resume}'
+        if not args.resume else f'logs/{args.dataset}_frame/{args.resume}'
     if args.resume is None:
         os.makedirs(logdir, exist_ok=True)
         copy_tree('./multiview_detector', logdir + '/scripts/multiview_detector')
@@ -137,7 +137,7 @@ def main():
             # save
             torch.save(model.state_dict(), os.path.join(logdir, 'MultiviewDetector.pth'))
     else:
-        resume_dir = f'logs/{args.dataset}/' + args.resume
+        resume_dir = f'logs/{args.dataset}_frame/' + args.resume
         resume_fname = resume_dir + '/MultiviewDetector.pth'
         model.load_state_dict(torch.load(resume_fname))
         model.eval()

@@ -10,6 +10,7 @@ from torchvision.models.mobilenet import mobilenet_v2
 from multiview_detector.models.resnet import resnet18, resnet50
 from PIL import Image
 import matplotlib.pyplot as plt
+import cv2
 
 
 class ImageProjVariant(nn.Module):
@@ -63,11 +64,23 @@ class ImageProjVariant(nn.Module):
         for cam in range(self.num_cam):
             img_res = torch.zeros([B, 1, H, W], requires_grad=False).to('cuda:0')
             imgs_result.append(img_res)
+            img_res = F.interpolate(imgs[:, cam].to('cuda:0'), self.upsample_shape, mode='bilinear')
             proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:0')
-            img_feature = kornia.warp_perspective(imgs[:, cam].to('cuda:0'), proj_mat, self.reducedgrid_shape)
+            img_feature = kornia.warp_perspective(img_res, proj_mat, self.reducedgrid_shape)
             if visualize:
                 projected_image_rgb = img_feature[0, :].detach().cpu().numpy().transpose([1, 2, 0])
                 projected_image_rgb = Image.fromarray((projected_image_rgb * 255).astype('uint8'))
+
+                # xi = np.arange(0, self.reducedgrid_shape[0], 40)
+                # yi = np.arange(0, self.reducedgrid_shape[1], 40)
+                # world_grid = np.stack(np.meshgrid(yi, xi, indexing='ij')).reshape([2, -1]).transpose()
+                #
+                # projected_image_rgb = cv2.cvtColor(np.array(projected_image_rgb), cv2.COLOR_RGB2BGR)
+                # for point in world_grid:
+                #     cv2.circle(projected_image_rgb, tuple(point.astype(int)), 5, (0, 255, 0), -1)
+                # projected_image_rgb = Image.fromarray(cv2.cvtColor(projected_image_rgb, cv2.COLOR_BGR2RGB))
+
+                projected_image_rgb.save('map_grid_visualize.png')
                 plt.imshow(projected_image_rgb)
                 plt.show()
             projected_imgs.append(img_feature.to('cuda:0'))
@@ -114,7 +127,7 @@ def test():
 
     transform = T.Compose([T.Resize([720, 1280]),  # H,W
                            T.ToTensor(), ])
-    dataset = frameDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')), transform=transform)
+    dataset = frameDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')), transform=transform, grid_reduce=1)
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
     imgs, map_gt, imgs_gt, frame = next(iter(dataloader))
     model = ImageProjVariant(dataset)

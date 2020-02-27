@@ -4,10 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import kornia
-from torchvision.models.alexnet import alexnet
 from torchvision.models.vgg import vgg11
-from torchvision.models.mobilenet import mobilenet_v2
-from multiview_detector.models.resnet import resnet18, resnet50
+from multiview_detector.models.resnet import resnet18
 
 import matplotlib.pyplot as plt
 
@@ -70,13 +68,22 @@ class PerspTransDetector(nn.Module):
             proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:0')
             world_feature = kornia.warp_perspective(img_feature.to('cuda:0'), proj_mat, self.reducedgrid_shape)
             if visualize:
-                plt.imshow(world_feature[0, 0].detach().cpu().numpy())
+                plt.imshow(torch.norm(img_feature[0].detach(), dim=0).cpu().numpy())
+                plt.show()
+                plt.imshow(torch.norm(world_feature[0].detach(), dim=0).cpu().numpy())
                 plt.show()
             world_features.append(world_feature.to('cuda:0'))
 
         world_features = torch.cat(world_features + [self.coord_map.repeat([B, 1, 1, 1]).to('cuda:0')], dim=1)
+        if visualize:
+            plt.imshow(torch.norm(world_features[0].detach(), dim=0).cpu().numpy())
+            plt.show()
         map_result = self.map_classifier(world_features.to('cuda:0'))
         map_result = F.interpolate(map_result, self.reducedgrid_shape, mode='bilinear')
+
+        if visualize:
+            plt.imshow(torch.norm(map_result[0].detach(), dim=0).cpu().numpy())
+            plt.show()
         return map_result, imgs_result
 
     def get_imgcoord2worldgrid_matrices(self, intrinsic_matrices, extrinsic_matrices, worldgrid2worldcoord_mat):
@@ -115,10 +122,13 @@ def test():
     transform = T.Compose([T.Resize([720, 1280]),  # H,W
                            T.ToTensor(),
                            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset = frameDataset(MultiviewX(os.path.expanduser('~/Data/MultiviewX')), transform=transform)
+    dataset = frameDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')), transform=transform)
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
     imgs, map_gt, imgs_gt, frame = next(iter(dataloader))
     model = PerspTransDetector(dataset)
+    model.load_state_dict(torch.load('/home_ssd/houyz/Code/multiview_one_stage/logs/wildtrack_frame/2020-02-25_16-08-07/MultiviewDetector.pth'
+        ))
+    # '/home_ssd/houyz/Code/multiview_one_stage/logs/multiviewX_frame/2020-02-23_22-21-55/MultiviewDetector.pth'
     map_res, img_res = model(imgs, visualize=True)
     pass
 

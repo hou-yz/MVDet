@@ -70,6 +70,8 @@ class ResProjVariant(nn.Module):
             proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:0')
             world_feature = kornia.warp_perspective(img_res.to('cuda:0'), proj_mat, self.reducedgrid_shape)
             if visualize:
+                plt.imshow(img_res[0, 0].detach().cpu().numpy())
+                plt.show()
                 plt.imshow(world_feature[0, 0].detach().cpu().numpy())
                 plt.show()
             world_features.append(world_feature.to('cuda:0'))
@@ -115,10 +117,12 @@ def test():
     transform = T.Compose([T.Resize([720, 1280]),  # H,W
                            T.ToTensor(),
                            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset = frameDataset(MultiviewX(os.path.expanduser('~/Data/MultiviewX')), transform=transform)
+    dataset = frameDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')), transform=transform)
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
     imgs, map_gt, imgs_gt, frame = next(iter(dataloader))
     model = ResProjVariant(dataset)
+    model.load_state_dict(torch.load(
+        '/home_ssd/houyz/Code/multiview_one_stage/logs/wildtrack_frame/2020-02-22_14-55-26/MultiviewDetector.pth'))
     map_res, img_res = model(imgs, visualize=True)
     pass
 
