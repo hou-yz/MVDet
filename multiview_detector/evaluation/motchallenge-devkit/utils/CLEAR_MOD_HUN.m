@@ -1,4 +1,4 @@
-function [metrics, metricsInfo, additionalInfo]=CLEAR_MOD_HUN(gt,det,td)
+function [metrics, metricsInfo, additionalInfo]=CLEAR_MOD_HUN(gt,det,options)
 % compute CLEAR Detection metrics according to
 % PERFORMANCE EVALUATION PROTOCOL FOR FACE, PERSON AND
 %  VEHICLE DETECTION & TRACKING IN VIDEO ANALYSIS AND
@@ -29,6 +29,14 @@ function [metrics, metricsInfo, additionalInfo]=CLEAR_MOD_HUN(gt,det,td)
 % det - detection result
 
 
+% default options: 2D
+if nargin<3
+    options.eval3d=0;   % only bounding box overlap
+    options.td=50/2.5;  % threshold as distance
+end
+
+
+td=options.td;
 
 % if X,Y not existent, assume 2D
 %  if ~isfield(gtInfo,'X'), gtInfo.X=gtInfo.Xi; end
@@ -100,6 +108,7 @@ d=zeros(F,Ngt);  % all distances;
 distances=Inf*ones(F,Ngt);  % all overlaps
 
 %  matched=@matched2d;
+%  if options.eval3d, matched=@matched3d; end
 
 allfalsepos=zeros(F,N);
 
@@ -140,7 +149,30 @@ for t=1:F
     Nt = length(DetsInFrame);
     g(t)=Ngtt;
 	
+    if options.eval3d
+        alldist=Inf*ones(Ngtt, Nt);
     
+        mindist=0;
+        for o=1:Ngtt
+            GT=[gt(GTsInFrame(o),8), gt(GTsInFrame(o),9)];
+            for e=1:Nt
+                E=[det(DetsInFrame,8), det(DetsInFrame(e),9)];
+                alldist(ocnt,ecnt)=norm(GT-E);
+            end
+        end
+            
+        
+        tmpai=alldist;
+        tmpai(tmpai>td)=Inf;
+        [Mtch,~]=Hungarian(tmpai);
+        [u,v]=find(Mtch);
+        
+        for mmm=1:length(u)
+            M(t,u(mmm))=v(mmm);
+        end
+
+    
+    else
         if ~isempty(GTsInFrame) && ~isempty(DetsInFrame)
             dist=inf*ones(Ngtt,Nt);
 
@@ -168,7 +200,7 @@ for t=1:F
             end
         end
 
-    
+    end
     
     curdetected=find(M(t,:)); % which GTs are detected?
     
@@ -193,9 +225,10 @@ for t=1:F
     c(t)=numel(curdetected);
     for ct=curdetected
         eid=M(t,ct);
+        if options.eval3d
             d(t,ct)=norm([gt(GTsInFrame(ct),8),  gt(GTsInFrame(ct),9)] - ...
                 [det(DetsInFrame(eid),8),  det(DetsInFrame(eid),9)]);
-        
+        else
 			gtX = gt(GTsInFrame(ct), 3);
 			gtY = gt(GTsInFrame(ct), 4);
 			
@@ -204,7 +237,7 @@ for t=1:F
             
             distances(t,ct)=getDistance(gtX, gtY, stX, stY);
 
-        
+        end
     end
     
     
@@ -219,9 +252,11 @@ falsepositives=sum(fp);
 truepositives=sum(c);
 %  idswitches=sum(mme);
 
-
+if options.eval3d
+    MODP=(1-sum(sum(d))/sum(c)/td) * 100; % avg distance to [0,100]
+else
     MODP=sum(1-distances(distances<td)/td)/sum(c) * 100; % avg ol
-
+end
 if isnan(MODP), MODP=0; end % force to 0 if no matches found
 
 MODA=(1-((sum(m)+sum(fp))/sum(g)))*100;

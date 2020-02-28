@@ -1,11 +1,6 @@
 function detResults=evaluateDetection(res_fpath,gt_fpath, chlname)
 %% evaluate detections using P. Dollar's script
 
-    if strcmpi(chlname,'wildtrack')
-        thres = 50/2.5;
-    elseif strcmpi(chlname,'multiviewx')
-        thres = 50/2.5;
-    end
 
 
 if contains(res_fpath,'train')
@@ -108,7 +103,7 @@ try
         gt0=gtAll;
         dt0=detAll;
         
-        [detMetsAll, detMetsInfo, detMetsAddInfo]=CLEAR_MOD_HUN(gtAllMatrix,detAllMatrix, thres);
+        [detMetsAll, detMetsInfo, detMetsAddInfo]=CLEAR_MOD_HUN(gtAllMatrix,detAllMatrix);
 
         
         detResults(mcnt).detMets=detMetsAll;
