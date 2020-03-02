@@ -1,11 +1,13 @@
 import os
-
-os.environ['OMP_NUM_THREADS'] = '1'
-import sys
-
-sys.path.insert(0, '/home/houyz/Code/multiview_one_stage')
+#
+# os.environ['OMP_NUM_THREADS'] = '1'
+# import sys
+#
+# sys.path.insert(0, '/home/houyz/Code/multiview_one_stage')
+import multiprocessing
 import re
 import json
+import time
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -42,6 +44,7 @@ class bboxDataset(VisionDataset):
         for frame_folder in frame_folders:
             for pos_folder in sorted(os.listdir(os.path.join(self.fpath_header, frame_folder))):
                 self.fpath_by_index.append(os.path.join(frame_folder, pos_folder))
+        pass
 
     def prepare_gt(self):
         og_gt = []
@@ -115,25 +118,20 @@ class bboxDataset(VisionDataset):
 
         bbox_by_pos_cam = self.base.read_pom()
 
+        t0 = time.time()
         os.makedirs(self.fpath_header, exist_ok=True)
+        p = multiprocessing.Pool(16)
         for index in tqdm(range(len(all_frame_pos_by_index))):
-            frame, pos, pid = all_frame_pos_by_index[index]['frame'], \
-                              all_frame_pos_by_index[index]['positionID'], \
-                              all_frame_pos_by_index[index]['personID']
-            os.makedirs(os.path.join(self.fpath_header, 'frame{:04d}/pos{:06d}_pid{:03d}'.format(frame, pos, pid)),
-                        exist_ok=True)
-            for cam in range(self.num_cam):
-                if bbox_by_pos_cam[pos][cam] is not None:
-                    img_fpath = img_fpaths[cam][frame]
-                    img = Image.open(img_fpath).convert('RGB')
-                    left, top, right, bottom = bbox_by_pos_cam[pos][cam]
-                    img = img.crop([left, top, right, bottom])
-                else:
-                    img = Image.fromarray(np.zeros([4, 4, 3], np.uint8))
-                    pass
-                fname = self.fpath_header + \
-                        '/frame{:04d}/pos{:06d}_pid{:03d}/cam{:d}.jpg'.format(frame, pos, pid, cam)
-                img.save(fname)
+            save_imgs_by_index(index, all_frame_pos_by_index, self.fpath_header, self.num_cam, bbox_by_pos_cam,
+                               img_fpaths, p)
+            pass
+        # for index in tqdm(range(len(all_frame_pos_by_index))):
+        #     p.apply_async(save_imgs_by_index,
+        #                   (index, all_frame_pos_by_index, self.fpath_header, self.num_cam, bbox_by_pos_cam, img_fpaths))
+        p.close()
+        p.join()  # Wait for all child processes to close.
+
+        print(time.time() - t0)
 
     def __getitem__(self, index, visualize=False):
         imgs = []
@@ -156,18 +154,47 @@ class bboxDataset(VisionDataset):
 
     def pos_quantization(self, pos, downscale):
         og_x, og_y = self.base.get_worldgrid_from_pos(pos)
-        quantized_x, quantized_y = int((og_x // downscale + 0.5) * downscale), \
-                                   int((og_y // downscale + 0.5) * downscale)
+        quantized_x, quantized_y = int((og_x // downscale) * downscale), \
+                                   int((og_y // downscale) * downscale)
         quantized_pos = self.base.get_pos_from_worldgrid([quantized_x, quantized_y])
         return quantized_pos
 
     def pos_reduced_to_og(self, reduced_pos, downscale, reduced_grid_shape):
-        reduced_x = reduced_pos % reduced_grid_shape[0]
-        reduced_y = reduced_pos // reduced_grid_shape[0]
-        quantized_x, quantized_y = int((reduced_x + 0.5) * downscale), \
-                                   int((reduced_y + 0.5) * downscale)
+        if self.base.indexing == 'xy':
+            reduced_x = reduced_pos % reduced_grid_shape[1]
+            reduced_y = reduced_pos // reduced_grid_shape[1]
+        else:
+            reduced_x = reduced_pos % reduced_grid_shape[0]
+            reduced_y = reduced_pos // reduced_grid_shape[0]
+        quantized_x, quantized_y = int((reduced_x) * downscale), \
+                                   int((reduced_y) * downscale)
         quantized_pos = self.base.get_pos_from_worldgrid([quantized_x, quantized_y])
         return quantized_pos
+
+
+def save_img_by_cam(bbox, fname, img_fpath):
+    os.makedirs(os.path.dirname(fname), exist_ok=True)
+    if bbox is not None:
+        img = Image.open(img_fpath).convert('RGB')
+        left, top, right, bottom = bbox
+        img = img.crop([left, top, right, bottom])
+    else:
+        img = Image.fromarray(np.zeros([1, 1, 3], np.uint8))
+        pass
+    img.save(fname)
+
+
+def save_imgs_by_index(index, all_frame_pos_by_index, fpath_header, num_cam, bbox_by_pos_cam, img_fpaths, p):
+    frame, pos, pid = all_frame_pos_by_index[index]['frame'], \
+                      all_frame_pos_by_index[index]['positionID'], \
+                      all_frame_pos_by_index[index]['personID']
+    os.makedirs(os.path.join(fpath_header, 'frame{:04d}'.format(frame)), exist_ok=True)
+    for cam in range(num_cam):
+        bbox = bbox_by_pos_cam[pos][cam]
+        img_fpath = img_fpaths[cam][frame]
+        fname = fpath_header + \
+                '/frame{:04d}/pos{:06d}_pid{:03d}/cam{:d}.jpg'.format(frame, pos, pid, cam)
+        p.apply_async(save_img_by_cam, (bbox, fname, img_fpath))
 
 
 def test():

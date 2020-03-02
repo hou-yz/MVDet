@@ -21,6 +21,7 @@ def nms(points, scores, dist_thres=50 / 2.5, top_k=50):
         return keep
     v, indices = scores.sort(0)  # sort in ascending order
     # I = I[v >= 0.01]
+    top_k = min(top_k, len(indices))
     indices = indices[-top_k:]  # indices of the top-k largest vals
 
     # keep = torch.Tensor()

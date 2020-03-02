@@ -62,7 +62,7 @@ class ImageProjVariant(nn.Module):
         projected_imgs = []
         imgs_result = []
         for cam in range(self.num_cam):
-            img_res = torch.zeros([B, 1, H, W], requires_grad=False).to('cuda:0')
+            img_res = torch.zeros([B, 2, H, W], requires_grad=False).to('cuda:0')
             imgs_result.append(img_res)
             img_res = F.interpolate(imgs[:, cam].to('cuda:0'), self.upsample_shape, mode='bilinear')
             proj_mat = self.proj_mats[cam].repeat([B, 1, 1]).float().to('cuda:0')

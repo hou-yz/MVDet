@@ -26,7 +26,7 @@ def main():
     parser.add_argument('--cls_thres', type=float, default=0.4)
     parser.add_argument('--soften', type=float, default=1, help='soften coefficient for softmax')
     parser.add_argument('--arch', type=str, default='vgg11')
-    parser.add_argument('-d', '--dataset', type=str, default='wildtrack_bbox', choices=['wildtrack_bbox'])
+    parser.add_argument('-d', '--dataset', type=str, default='wildtrack', choices=['wildtrack', 'multiviewx'])
     parser.add_argument('--test_type', type=str, default='test', choices=['val', 'test'])
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=64, metavar='N',
@@ -52,16 +52,23 @@ def main():
         torch.backends.cudnn.benchmark = True
 
     # dataset
+
     if 'wildtrack' in args.dataset:
-        data_path = os.path.expanduser('~/Data/wildtrack_bbox')
-        normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-        train_trans = T.Compose([T.Resize([256, 128]), T.ToTensor(), normalize, ])
-        test_trans = T.Compose([T.Resize([256, 128]), T.ToTensor(), normalize, ])
-        train_set = bboxDataset(Wildtrack(data_path), split='train', transform=train_trans)
-        val_set = bboxDataset(Wildtrack(data_path), split='val', transform=test_trans)  # ,train_ratio=0.9975
-        test_set = bboxDataset(Wildtrack(data_path), split=args.test_type, transform=test_trans)
+        data_path = os.path.expanduser('~/Data/Wildtrack')
+        base = Wildtrack(data_path)
+    elif 'multiviewx' in args.dataset:
+        data_path = os.path.expanduser('~/Data/MultiviewX')
+        base = MultiviewX(data_path)
     else:
         raise Exception
+
+    data_path = os.path.expanduser('~/Data/wildtrack_bbox')
+    normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+    train_trans = T.Compose([T.Resize([256, 128]), T.ToTensor(), normalize, ])
+    test_trans = T.Compose([T.Resize([256, 128]), T.ToTensor(), normalize, ])
+    train_set = bboxDataset(base, split='train', transform=train_trans)
+    val_set = bboxDataset(base, split='val', transform=test_trans)  # ,train_ratio=0.9975
+    test_set = bboxDataset(base, split=args.test_type, transform=test_trans)
 
     # network specific setting
 
@@ -72,8 +79,8 @@ def main():
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
                                               num_workers=args.num_workers, pin_memory=True)
 
-    logdir = f'logs/{args.dataset}/' + datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S') \
-        if not args.resume else f'logs/{args.dataset}/{args.resume}'
+    logdir = f'logs/{args.dataset}_bbox/' + datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S') \
+        if not args.resume else f'logs/{args.dataset}_bbox/{args.resume}'
     if args.resume is None:
         os.makedirs(logdir, exist_ok=True)
         copy_tree('./multiview_detector', logdir + '/scripts/multiview_detector')
@@ -125,13 +132,14 @@ def main():
         # save
         torch.save(model.state_dict(), os.path.join(logdir, 'MultiviewDetector.pth'))
     else:
-        resume_dir = f'logs/{args.dataset}/' + args.resume
+        resume_dir = f'logs/{args.dataset}_bbox/' + args.resume
         resume_fname = resume_dir + '/MultiviewDetector.pth'
         model.load_state_dict(torch.load(resume_fname))
         model.eval()
     print('Test loaded model...')
     trainer.test(test_loader, res_fpath=os.path.join(logdir, f'{args.test_type}.txt'))
-    matlab_eval(os.path.abspath(os.path.join(logdir, f'{args.test_type}.txt')), os.path.abspath(test_set.gt_fpath), test_set.base.__name__)
+    matlab_eval(os.path.abspath(os.path.join(logdir, f'{args.test_type}.txt')), os.path.abspath(test_set.gt_fpath),
+                test_set.base.__name__)
     pass
 
 

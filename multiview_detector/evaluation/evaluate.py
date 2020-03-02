@@ -17,16 +17,16 @@ def matlab_eval(res_fpath, gt_fpath, dataset='wildtrack'):
 
 
 if __name__ == "__main__":
-    res_fpath = '/home/houyz/Code/multiview_one_stage/logs/multiviewX_frame/2020-02-22_21-06-19/test_nms.txt'
-    gt_fpath = '/home/houyz/Data/MultiviewX/gt.txt'
+    res_fpath = '/home/houyz/Code/multiview_one_stage/logs/wildtrack_frame/default/2020-03-02_06-35-46/test_nms.txt'
+    gt_fpath = '/home/houyz/Data/Wildtrack/gt.txt'
     all_res_list = np.loadtxt(os.path.dirname(res_fpath) + '/all_res.txt')
     res_list = []
     for frame in np.unique(all_res_list[:, 0]):
         res = all_res_list[all_res_list[:, 0] == frame, :]
         positions, scores = torch.from_numpy(res[:, 1:3]).float(), torch.from_numpy(res[:, 3]).float()
-        ids, count = nms(positions, scores, 20, 50 * 12)
+        ids, count = nms(positions, scores, 20, np.inf)
         res_list.append(torch.cat([torch.ones([count, 1]) * frame, positions[ids[:count], :]], dim=1))
     res_list = torch.cat(res_list, dim=0).numpy()
     np.savetxt(res_fpath, res_list, '%d')
 
-    matlab_eval(res_fpath, gt_fpath, 'MultiviewX')
+    matlab_eval(res_fpath, gt_fpath, 'Wildtrack')

@@ -130,11 +130,14 @@ class PerspectiveTrainer(BaseTrainer):
             plt.close(fig)
 
             # visualizing the heatmap for per-view estimation
-            heatmap0 = imgs_res[0][0].detach().cpu().numpy().squeeze()
+            heatmap0_head = imgs_res[0][0, 0].detach().cpu().numpy().squeeze()
+            heatmap0_foot = imgs_res[0][0, 1].detach().cpu().numpy().squeeze()
             img0 = self.denormalize(data[0, 0]).cpu().numpy().squeeze().transpose([1, 2, 0])
             img0 = Image.fromarray((img0 * 255).astype('uint8'))
-            cam_result = add_heatmap_to_image(heatmap0, img0)
-            cam_result.save(os.path.join(self.logdir, 'cam1.jpg'))
+            head_cam_result = add_heatmap_to_image(heatmap0_head, img0)
+            head_cam_result.save(os.path.join(self.logdir, 'cam1_head.jpg'))
+            foot_cam_result = add_heatmap_to_image(heatmap0_foot, img0)
+            foot_cam_result.save(os.path.join(self.logdir, 'cam1_foot.jpg'))
 
         moda = 0
         if res_fpath is not None:
@@ -144,7 +147,7 @@ class PerspectiveTrainer(BaseTrainer):
             for frame in np.unique(all_res_list[:, 0]):
                 res = all_res_list[all_res_list[:, 0] == frame, :]
                 positions, scores = res[:, 1:3], res[:, 3]
-                ids, count = nms(positions, scores, 20, 600)
+                ids, count = nms(positions, scores, 20, np.inf)
                 res_list.append(torch.cat([torch.ones([count, 1]) * frame, positions[ids[:count], :]], dim=1))
             res_list = torch.cat(res_list, dim=0).numpy() if res_list else np.empty([0, 3])
             np.savetxt(res_fpath, res_list, '%d')
