@@ -19,7 +19,7 @@ class BBOXClassifier(nn.Module):
             self.base = nn.Sequential(*list(resnet50(in_channels=3 * num_cam).children())[:-2])
             out_channel = 2048
         else:
-            raise Exception
+            raise Exception('architecture currently support [vgg11, resnet18, resnet50]')
         self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.classifier_head = nn.Sequential(nn.Linear(out_channel, 512), nn.BatchNorm1d(512), nn.ReLU(),
                                              nn.Linear(512, 2, bias=False), )

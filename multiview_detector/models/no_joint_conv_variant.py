@@ -44,7 +44,7 @@ class NoJointConvVariant(nn.Module):
             self.base_pt2 = base[split:].to('cuda:0')
             out_channel = 512
         else:
-            raise Exception
+            raise Exception('architecture currently support [vgg11, resnet18]')
         # 2.5cm -> 0.5m: 20x
         self.img_classifier = nn.Sequential(nn.Conv2d(out_channel, 64, 1), nn.ReLU(),
                                             nn.Conv2d(64, 2, 1, bias=False)).to('cuda:0')

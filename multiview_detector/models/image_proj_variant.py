@@ -48,7 +48,7 @@ class ImageProjVariant(nn.Module):
             self.base_pt2 = base[split:].to('cuda:0')
             out_channel = 512
         else:
-            raise Exception
+            raise Exception('architecture currently support [vgg11, resnet18]')
         # 2.5cm -> 0.5m: 20x
         self.map_classifier = nn.Sequential(nn.Conv2d(out_channel, 512, 3, padding=1), nn.ReLU(),
                                             # nn.Conv2d(512, 512, 5, 1, 2), nn.ReLU(),

@@ -60,7 +60,7 @@ def main():
         data_path = os.path.expanduser('~/Data/MultiviewX')
         base = MultiviewX(data_path)
     else:
-        raise Exception
+        raise Exception('must choose from [wildtrack, multiviewx]')
 
     data_path = os.path.expanduser('~/Data/wildtrack_bbox')
     normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
