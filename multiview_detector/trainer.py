@@ -88,6 +88,7 @@ class PerspectiveTrainer(BaseTrainer):
         losses = 0
         precision_s, recall_s = AverageMeter(), AverageMeter()
         all_res_list = []
+        t0 = time.time()
         if res_fpath is not None:
             assert gt_fpath is not None
         for batch_idx, (data, map_gt, imgs_gt, frame) in enumerate(data_loader):
@@ -118,6 +119,9 @@ class PerspectiveTrainer(BaseTrainer):
             recall = true_positive / (true_positive + false_negative + 1e-4)
             precision_s.update(precision)
             recall_s.update(recall)
+
+        t1 = time.time()
+        t_epoch = t1 - t0
 
         if visualize:
             fig = plt.figure()
@@ -157,9 +161,8 @@ class PerspectiveTrainer(BaseTrainer):
             print('moda: {:.1f}%, modp: {:.1f}%, precision: {:.1f}%, recall: {:.1f}%'.
                   format(moda, modp, precision, recall))
 
-        print('Test, Loss: {:.6f}, Precision: {:.1f}%, Recall: {:.1f}%'.format(losses / (len(data_loader) + 1),
-                                                                               precision_s.avg * 100,
-                                                                               recall_s.avg * 100))
+        print('Test, Loss: {:.6f}, Precision: {:.1f}%, Recall: {:.1f}, \tTime: {:.3f}'.format(
+            losses / (len(data_loader) + 1), precision_s.avg * 100, recall_s.avg * 100, t_epoch))
 
         return losses / len(data_loader), precision_s.avg * 100, moda
 

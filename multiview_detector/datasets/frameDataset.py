@@ -64,6 +64,15 @@ class frameDataset(VisionDataset):
             with open(os.path.join(self.root, 'annotations_positions', fname)) as json_file:
                 all_pedestrians = json.load(json_file)
             for single_pedestrian in all_pedestrians:
+                def is_in_cam(cam):
+                    return not (single_pedestrian['views'][cam]['xmin'] == -1 and
+                                single_pedestrian['views'][cam]['xmax'] == -1 and
+                                single_pedestrian['views'][cam]['ymin'] == -1 and
+                                single_pedestrian['views'][cam]['ymax'] == -1)
+
+                in_cam_range = sum(is_in_cam(cam) for cam in range(self.num_cam))
+                if not in_cam_range:
+                    continue
                 grid_x, grid_y = self.base.get_worldgrid_from_pos(single_pedestrian['positionID'])
                 og_gt.append(np.array([frame, grid_x, grid_y]))
         og_gt = np.stack(og_gt, axis=0)
