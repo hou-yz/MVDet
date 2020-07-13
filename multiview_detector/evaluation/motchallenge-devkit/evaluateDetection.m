@@ -1,23 +1,23 @@
 function detResults=evaluateDetection(res_fpath,gt_fpath, chlname)
 %% evaluate detections using P. Dollar's script
 
-
-
-if contains(res_fpath,'train')
+filename = split(res_fpath,'/');
+filename = char(filename(end));
+if contains(filename,'train')
     splitStrLong='Training Set';
     if strcmpi(chlname,'wildtrack')
         frames = 0:5:1795;
     elseif strcmpi(chlname,'multiviewx')
         frames = 0:359;
     end
-elseif contains(res_fpath,'val')
-    splitStrLong='Validation Set';
-    if strcmpi(chlname,'wildtrack')
-        frames = [1800,1805];
-    elseif strcmpi(chlname,'multiviewx')
-        frames = [360,361];
-    end
-elseif contains(res_fpath,'test')
+% elseif contains(filename,'val')
+%     splitStrLong='Validation Set';
+%     if strcmpi(chlname,'wildtrack')
+%         frames = [1800,1805];
+%     elseif strcmpi(chlname,'multiviewx')
+%         frames = [360,361];
+%     end
+elseif contains(filename,'test')
     splitStrLong='Test Set';
     if strcmpi(chlname,'wildtrack')
         frames = 1800:5:1995;
