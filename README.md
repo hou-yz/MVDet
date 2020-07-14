@@ -1,10 +1,10 @@
 # Multiview Detection with Feature Perspective Transformation [[Website](https://hou-yz.github.io/publication/2020-eccv2020-mvdet)] [[arXiv (TBD)]()]
 
 ```
-@article{hou2020multiview,
+@inproceedings{hou2020multiview,
   title={Multiview Detection with Feature Perspective Transformation},
   author={Hou, Yunzhong and Zheng, Liang and Gould, Stephen},
-  journal={ECCV},
+  booktitle={ECCV},
   year={2020}
 }
 ```
