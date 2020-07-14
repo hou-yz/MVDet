@@ -154,9 +154,9 @@ class frameDataset(VisionDataset):
 
 def test():
     from multiview_detector.datasets.Wildtrack import Wildtrack
-    from multiview_detector.datasets.MultiviewX import MultiviewX
+    # from multiview_detector.datasets.MultiviewX import MultiviewX
     from multiview_detector.utils.projection import get_worldcoord_from_imagecoord
-    dataset = frameDataset(MultiviewX(os.path.expanduser('~/Data/MultiviewX')))
+    dataset = frameDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')))
     # test projection
     world_grid_maps = []
     xx, yy = np.meshgrid(np.arange(0, 1920, 20), np.arange(0, 1080, 20))
