@@ -126,9 +126,6 @@ def test():
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
     imgs, map_gt, imgs_gt, frame = next(iter(dataloader))
     model = PerspTransDetector(dataset)
-    model.load_state_dict(torch.load('/home_ssd/houyz/Code/multiview_one_stage/logs/wildtrack_frame/2020-02-25_16-08-07/MultiviewDetector.pth'
-        ))
-    # '/home_ssd/houyz/Code/multiview_one_stage/logs/multiviewX_frame/2020-02-23_22-21-55/MultiviewDetector.pth'
     map_res, img_res = model(imgs, visualize=True)
     pass
 
