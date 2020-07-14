@@ -15,7 +15,7 @@ We release the PyTorch code for **MVDet**, a state-of-the-art multiview pedestri
 
 Wildtrack             |  MultiviewX
 :-------------------------:|:-------------------------:
-![alt text](https://hou-yz.github.io/images/eccv2020_mvdet_wildtrack.gif "Detection results on Wildtrack dataset")  |  ![alt text](https://hou-yz.github.io/images/eccv2020_mvdet_multiviewx.gif "Detection results on MultiviewX dataset")
+![alt text](https://hou-yz.github.io/images/eccv2020_mvdet_wildtrack_demo.gif "Detection results on Wildtrack dataset")  |  ![alt text](https://hou-yz.github.io/images/eccv2020_mvdet_multiviewx_demo.gif "Detection results on MultiviewX dataset")
 
  
 ## Content
@@ -32,7 +32,7 @@ Wildtrack             |  MultiviewX
 ## MultiviewX dataset
 Using pedestrian models from [PersonX](https://github.com/sxzrt/Dissecting-Person-Re-ID-from-the-Viewpoint-of-Viewpoint), in Unity, we build a novel synthetic dataset **MultiviewX**. 
 
-![alt text](https://hou-yz.github.io/images/eccv2020_mvdet_multiviewx.png "Visualization of MultiviewX dataset")
+![alt text](https://hou-yz.github.io/images/eccv2020_mvdet_multiviewx_dataset.png "Visualization of MultiviewX dataset")
 
 MultiviewX dataset covers a square of 16 meters by 25 meters. We quantize the ground plane into a 640x1000 grid. There are 6 cameras with overlapping field-of-view in MultiviewX dataset, each of which outputs a 1080x1920 resolution image. We also generate annotations for 400 frames in MultiviewX at 2 fps (same as Wildtrack). On average, 4.41 cameras are covering the same location. 
 
