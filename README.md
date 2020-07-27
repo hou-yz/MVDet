@@ -40,7 +40,7 @@ MultiviewX dataset covers a square of 16 meters by 25 meters. We quantize the gr
 Please refer to this [link](https://1drv.ms/u/s!AtzsQybTubHfgP9BJt2g7R_Ku4X3Pg?e=GFGeVn) for download.
 
 ### Build your own version
-Please refer to this [repo]() for a detailed guide & codes you might need.
+Please refer to this [repo](https://github.com/hou-yz/MultiviewX) for a detailed guide & toolkits you might need.
 
 
 
