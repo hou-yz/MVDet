@@ -14,7 +14,7 @@ extrinsic_camera_matrix_filenames = ['extr_CVLab1.xml', 'extr_CVLab2.xml', 'extr
 class Wildtrack(VisionDataset):
     def __init__(self, root):
         super().__init__(root)
-        # WILDTRACK has ij-indexing: H*W=480*1440, normally x would be \in [0,1440), not [0,480)
+        # WILDTRACK has ij-indexing: H*W=480*1440, so x should be \in [0,480), y \in [0,1440)
         # WILDTRACK has in-consistent unit: centi-meter (cm) for calibration & pos annotation,
         self.__name__ = 'Wildtrack'
         self.img_shape, self.worldgrid_shape = [1080, 1920], [480, 1440]  # H,W; N_row,N_col
