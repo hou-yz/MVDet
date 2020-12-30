@@ -14,5 +14,13 @@ Translated by [Zicheng Duan](https://github.com/ZichengDuan).
    3. The training process would not be affected by this API.
 
 ### Usage
-Please go to ```test()``` function in ```trainer.py``` for more details.
-![code]("multiview_detector/evaluation/pyeval/codes.png")
+Please go to ```test()``` function in ```trainer.py``` for more details.  
+
+```
+recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
+                                                        data_loader.dataset.base.__name__)
+
+# If you want to use the unofiicial python evaluation tool for convenient purposes.
+# recall, precision, modp, moda = python_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
+#                                             data_loader.dataset.base.__name__)
+```
