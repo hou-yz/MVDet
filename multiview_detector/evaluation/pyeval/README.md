@@ -1,10 +1,11 @@
 ## Python Evaluation Tool for MVDet
 
-This is simply the python translation of a MATLAB　Evaluation tool used to evaluate detection result created by P. Dollar.
-Translated by [Zicheng Duan](https://github.com/ZichengDuan)
+This is simply the python translation of a MATLAB　Evaluation tool used to evaluate detection result created by P. Dollar.  
+Translated by [Zicheng Duan](https://github.com/ZichengDuan)  
 
 ### Purpose
-   Allowing the project to run purely in Python without using MATLAB Engine.
+   Allowing the project to run purely in Python without using MATLAB Engine.  
+   
 
 ### Critical information before usage
    1. This API is only tested and deployed in this project: [hou-yz/MVDet](https://github.com/hou-yz/MVDet), might not be compatible with other projects.
