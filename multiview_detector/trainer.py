@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import cv2
 from PIL import Image
-from multiview_detector.evaluation.evaluate import matlab_eval
+from multiview_detector.evaluation.evaluate import matlab_eval, python_eval
 from multiview_detector.utils.nms import nms
 from multiview_detector.utils.meters import AverageMeter
 from multiview_detector.utils.image_utils import add_heatmap_to_image
@@ -158,6 +158,11 @@ class PerspectiveTrainer(BaseTrainer):
 
             recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
                                                         data_loader.dataset.base.__name__)
+
+            # If you want to use the unofiicial python evaluation tool for convenient purposes.
+            # recall, precision, modp, moda = python_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
+            #                                             data_loader.dataset.base.__name__)
+            
             print('moda: {:.1f}%, modp: {:.1f}%, precision: {:.1f}%, recall: {:.1f}%'.
                   format(moda, modp, precision, recall))
 

@@ -32,5 +32,6 @@ detection result file: ```motchallenge-devkit/test.txt```
     - The first column in ground truth / detection file should be frame number
     - The second and third column should be x and y coordinate
 
-
+## Alternative Tools
+A Python version of the official MATLAB API is provided in ```multiview_detector/pyeval```
 
