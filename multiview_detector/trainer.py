@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import cv2
 from PIL import Image
-from multiview_detector.evaluation.evaluate import matlab_eval
+from multiview_detector.evaluation.evaluate import matlab_eval, python_eval
 from multiview_detector.utils.nms import nms
 from multiview_detector.utils.meters import AverageMeter
 from multiview_detector.utils.image_utils import add_heatmap_to_image
