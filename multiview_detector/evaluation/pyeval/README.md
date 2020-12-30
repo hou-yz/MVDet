@@ -15,4 +15,4 @@ Translated by [Zicheng Duan](https://github.com/ZichengDuan).
 
 ### Usage
 Please go to ```test()``` function in ```trainer.py``` for more details.
-![code]("codes.png")
+![code]("multiview_detector/evaluation/pyeval/codes.png")
