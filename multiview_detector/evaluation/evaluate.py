@@ -2,6 +2,7 @@ import os
 import numpy as np
 import torch
 import matlab.engine
+from multiview_detector.evaluation.pyeval.evaluateDetection import evaluateDetection_py
 # from multiview_detector.utils.nms import nms
 
 
@@ -12,6 +13,9 @@ def matlab_eval(res_fpath, gt_fpath, dataset='wildtrack'):
     recall, precision, moda, modp = np.array(res['detMets']).squeeze()[[0, 1, -2, -1]]
     return recall, precision, moda, modp
 
+def python_eval(res_fpath, gt_fpath, dataset='wildtrack'):
+    MODP, MODA, recall, precision = evaluateDetection_py(res_fpath, gt_fpath, dataset)
+    return recall, precision, MODP, MODA
 
 if __name__ == "__main__":
     res_fpath = 'test.txt'

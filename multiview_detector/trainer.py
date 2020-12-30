@@ -158,6 +158,11 @@ class PerspectiveTrainer(BaseTrainer):
 
             recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
                                                         data_loader.dataset.base.__name__)
+
+            # If you want to use the unofiicial python evaluation tool for convenient purposes.
+            # recall, precision, modp, moda = python_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
+            #                                             data_loader.dataset.base.__name__)
+            
             print('moda: {:.1f}%, modp: {:.1f}%, precision: {:.1f}%, recall: {:.1f}%'.
                   format(moda, modp, precision, recall))
 
