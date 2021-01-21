@@ -79,3 +79,6 @@ In order to train classifiers, please run the following,
 CUDA_VISIBLE_DEVICES=0,1 python main.py -d wildtrack
 ``` 
 This should automatically return evaluation results similar to the reported 88.2\% MODA on Wildtrack dataset. 
+
+### Pre-trained models
+You can download the checkpoints at this [link](https://anu365-my.sharepoint.com/:u:/g/personal/u6852178_anu_edu_au/Edhf_qajGMZLvlh9o6kByeUBxo_4E6DVjiQR2mrpGFtPjA?e=qEgiWR).
