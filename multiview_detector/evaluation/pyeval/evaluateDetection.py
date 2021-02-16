@@ -2,6 +2,7 @@
 import numpy as np
 from multiview_detector.evaluation.pyeval.CLEAR_MOD_HUN import CLEAR_MOD_HUN
 
+
 def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
     """
     This is simply the python translation of a MATLAB　Evaluation tool used to evaluate detection result created by P. Dollar.
@@ -77,7 +78,7 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
             gtAllMatrix = tmp_arr
             gt_flag = False
         else:
-            gtAllMatrix = np.concatenate((gtAllMatrix, tmp_arr),axis=0)
+            gtAllMatrix = np.concatenate((gtAllMatrix, tmp_arr), axis=0)
         idxs = np.where(detRaw[:, 0] == t)
         idx = idxs[0]
         idx_len = len(idx)
@@ -91,7 +92,7 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
             detAllMatrix = tmp_arr
             det_flag = False
         else:
-            detAllMatrix = np.concatenate((detAllMatrix, tmp_arr),axis=0)
+            detAllMatrix = np.concatenate((detAllMatrix, tmp_arr), axis=0)
         frame_ctr += 1
     MODP, MODA, recall, precision = CLEAR_MOD_HUN(gtAllMatrix, detAllMatrix)
     return MODP, MODA, recall, precision
