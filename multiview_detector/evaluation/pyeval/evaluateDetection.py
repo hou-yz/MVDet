@@ -12,7 +12,7 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
     1. To allow the project to run purely in Python without using MATLAB Engine.
 
     Some critical information to notice before you use this API:
-    1.. This API is only tested and deployed in this project: MVDet https://github.com/hou-yz/MVDet, might not be compatible with other projects.
+    1. This API is only tested and deployed in this project: MVDet https://github.com/hou-yz/MVDet, might not be compatible with other projects.
     2. The detection result using this API is a little bit lower (approximately 0~2% decrease in MODA, MODP) than that using MATLAB evaluation tool,
         the reason might be that the Hungarian Algorithm implemented in sklearn.utils.linear_assignment_.linear_assignment is a little bit different with the
         one implemented by P. Dollar, hence leading to different results.
@@ -21,7 +21,7 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
 
     @param res_fpath: detection result file path
     @param gt_fpath: ground truth result file path
-    @param dataset: dataset name，should be "WildTrack" or "MultiviewX"
+    @param dataset: dataset name, should be "WildTrack" or "MultiviewX"
     @return: MODP, MODA, recall, precision
     """
 
@@ -48,9 +48,6 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
             start = 360
             steps = 1
             frames = 399
-
-    print("Using dataset %s" % dataset_name)
-    print("Set: %s" % splitStrLong)
 
     gtRaw = np.loadtxt(gt_fpath)
     detRaw = np.loadtxt(res_fpath)
@@ -99,7 +96,7 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
 
 
 if __name__ == "__main__":
-    res_fpath = "~/ProjectFolder/test.txt"
-    gt_fpath = "~/Data/Wildtrack/gt.txt"
+    res_fpath = "../test-demo.txt"
+    gt_fpath = "../test-demo.txt"
     dataset_name = "Wildtrack"
     evaluateDetection_py(res_fpath, gt_fpath, dataset_name)

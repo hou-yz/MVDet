@@ -1,6 +1,10 @@
 import numpy as np
-from multiview_detector.evaluation.pyeval.getDistance import getDistance
 from scipy.optimize import linear_sum_assignment
+import math
+
+
+def getDistance(x1, y1, x2, y2):
+    return math.sqrt(pow((x1 - x2), 2) + pow((y1 - y2), 2))
 
 
 def CLEAR_MOD_HUN(gt, det):
@@ -63,9 +67,9 @@ def CLEAR_MOD_HUN(gt, det):
 
             # Please notice that the price/distance of are set to 100000 instead of np.inf, since the Hungarian Algorithm implemented in
             # sklearn will suffer from long calculation time if we use np.inf.
-            tmpai[tmpai > td] = 100000
-            if not tmpai.all() == 100000:
-                HUN_res = linear_sum_assignment(tmpai)
+            tmpai[tmpai > td] = 1e6
+            if not tmpai.all() == 1e6:
+                HUN_res = np.array(linear_sum_assignment(tmpai)).T
                 tmp_zeros = np.zeros(tmpai.shape)
                 for entry in HUN_res:
                     if entry[0] < tmp_zeros.shape[0] and entry[1] < tmp_zeros.shape[1]:
