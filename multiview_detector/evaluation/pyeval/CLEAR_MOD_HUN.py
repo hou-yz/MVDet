@@ -26,7 +26,7 @@ def CLEAR_MOD_HUN(gt, det):
     [3]	MODA          - N-MODA
     [4]	MODP          - N-MODP
     """
-    td = 50 / 2.5
+    td = 50 / 2.5  # distance threshold
 
     F = int(max(gt[:, 0])) + 1
     N = int(max(det[:, 1])) + 1
@@ -70,20 +70,15 @@ def CLEAR_MOD_HUN(gt, det):
             tmpai[tmpai > td] = 1e6
             if not tmpai.all() == 1e6:
                 HUN_res = np.array(linear_sum_assignment(tmpai)).T
-                tmp_zeros = np.zeros(tmpai.shape)
-                for entry in HUN_res:
-                    if entry[0] < tmp_zeros.shape[0] and entry[1] < tmp_zeros.shape[1]:
-                        tmp_zeros[entry[0], entry[1]] = 1
-                matches = tmp_zeros
-                u, v = np.where(matches > 0)
+                HUN_res = HUN_res[tmpai[HUN_res[:, 0], HUN_res[:, 1]] < td]
+                u, v = HUN_res[HUN_res[:, 1].argsort()].T
                 for mmm in range(1, len(u) + 1):
-                    M[t - 1, u[mmm - 1]] = v[mmm - 1]
-        curdetected = np.where(M[t - 1, :])
-        curdetected = curdetected[0]
+                    M[t - 1, u[mmm - 1]] = v[mmm - 1] + 1
+        curdetected, = np.where(M[t - 1, :])
 
         c[0][t - 1] = curdetected.shape[0]
         for ct in curdetected:
-            eid = M[t - 1, ct]
+            eid = M[t - 1, ct] - 1
             gtX = gt[GTsInFrame[0][ct], 2]
 
             gtY = gt[GTsInFrame[0][ct], 3]
@@ -102,4 +97,4 @@ def CLEAR_MOD_HUN(gt, det):
     recall = np.sum(c) / np.sum(g) * 100 if np.sum(c) / np.sum(g) * 100 > 0 else 0
     precision = np.sum(c) / (np.sum(fp) + np.sum(c)) * 100 if np.sum(c) / (np.sum(fp) + np.sum(c)) * 100 > 0 else 0
 
-    return MODP, MODA, recall, precision
+    return recall, precision, MODA, MODP

@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import cv2
 from PIL import Image
-from multiview_detector.evaluation.evaluate import matlab_eval, python_eval
+from multiview_detector.evaluation.evaluate import evaluate
 from multiview_detector.utils.nms import nms
 from multiview_detector.utils.meters import AverageMeter
 from multiview_detector.utils.image_utils import add_heatmap_to_image
@@ -69,16 +69,16 @@ class PerspectiveTrainer(BaseTrainer):
                 # print(cyclic_scheduler.last_epoch, optimizer.param_groups[0]['lr'])
                 t1 = time.time()
                 t_epoch = t1 - t0
-                print('Train Epoch: {}, Batch:{}, \tLoss: {:.6f}, '
-                      'prec: {:.1f}%, recall: {:.1f}%, \tTime: {:.1f} (f{:.3f}+b{:.3f}), maxima: {:.3f}'.format(
+                print('Train Epoch: {}, Batch:{}, Loss: {:.6f}, '
+                      'prec: {:.1f}%, recall: {:.1f}%, Time: {:.1f} (f{:.3f}+b{:.3f}), maxima: {:.3f}'.format(
                     epoch, (batch_idx + 1), losses / (batch_idx + 1), precision_s.avg * 100, recall_s.avg * 100,
                     t_epoch, t_forward / batch_idx, t_backward / batch_idx, map_res.max()))
                 pass
 
         t1 = time.time()
         t_epoch = t1 - t0
-        print('Train Epoch: {}, Batch:{}, \tLoss: {:.6f}, '
-              'Precision: {:.1f}%, Recall: {:.1f}%, \tTime: {:.3f}'.format(
+        print('Train Epoch: {}, Batch:{}, Loss: {:.6f}, '
+              'Precision: {:.1f}%, Recall: {:.1f}%, Time: {:.3f}'.format(
             epoch, len(data_loader), losses / len(data_loader), precision_s.avg * 100, recall_s.avg * 100, t_epoch))
 
         return losses / len(data_loader), precision_s.avg * 100
@@ -156,13 +156,13 @@ class PerspectiveTrainer(BaseTrainer):
             res_list = torch.cat(res_list, dim=0).numpy() if res_list else np.empty([0, 3])
             np.savetxt(res_fpath, res_list, '%d')
 
-            recall, precision, moda, modp = matlab_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
-                                                        data_loader.dataset.base.__name__)
+            recall, precision, moda, modp = evaluate(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
+                                                     data_loader.dataset.base.__name__)
 
             # If you want to use the unofiicial python evaluation tool for convenient purposes.
             # recall, precision, modp, moda = python_eval(os.path.abspath(res_fpath), os.path.abspath(gt_fpath),
             #                                             data_loader.dataset.base.__name__)
-            
+
             print('moda: {:.1f}%, modp: {:.1f}%, precision: {:.1f}%, recall: {:.1f}%'.
                   format(moda, modp, precision, recall))
 

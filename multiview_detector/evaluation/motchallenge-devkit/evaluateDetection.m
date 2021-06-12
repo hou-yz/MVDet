@@ -1,15 +1,15 @@
 function detResults=evaluateDetection(res_fpath,gt_fpath, chlname)
 %% evaluate detections using P. Dollar's script
 
-filename = split(res_fpath,'/');
-filename = char(filename(end));
-if contains(filename,'train')
-    splitStrLong='Training Set';
-    if strcmpi(chlname,'wildtrack')
-        frames = 0:5:1795;
-    elseif strcmpi(chlname,'multiviewx')
-        frames = 0:359;
-    end
+% filename = split(res_fpath,'/');
+% filename = char(filename(end));
+% if contains(filename,'train')
+%    splitStrLong='Training Set';
+%    if strcmpi(chlname,'wildtrack')
+%        frames = 0:5:1795;
+%    elseif strcmpi(chlname,'multiviewx')
+%        frames = 0:359;
+%    end
 % elseif contains(filename,'val')
 %     splitStrLong='Validation Set';
 %     if strcmpi(chlname,'wildtrack')
@@ -17,14 +17,14 @@ if contains(filename,'train')
 %     elseif strcmpi(chlname,'multiviewx')
 %         frames = [360,361];
 %     end
-elseif contains(filename,'test')
-    splitStrLong='Test Set';
-    if strcmpi(chlname,'wildtrack')
-        frames = 1800:5:1995;
-    elseif strcmpi(chlname,'multiviewx')
-        frames = 360:399;
-    end
-end
+% elseif contains(filename,'test')
+%    splitStrLong='Test Set';
+%    if strcmpi(chlname,'wildtrack')
+%        frames = 1800:5:1995;
+%    elseif strcmpi(chlname,'multiviewx')
+%        frames = 360:399;
+%    end
+% end
 
 addpath(genpath('.'));
     
@@ -32,7 +32,7 @@ addpath(genpath('.'));
 % read sequence map
 
 fprintf('Challenge: %s\n',chlname);
-fprintf('Set: %s\n',splitStrLong);
+%fprintf('Set: %s\n',splitStrLong);
 
 
         
@@ -58,9 +58,11 @@ detAllMatrix=zeros(0,4);
     detRaw=readtable(res_fpath);
     detRaw=detRaw{:,:};
     if isempty(detRaw)
-        detRaw = [frames',ones(length(frames),2).*inf];
+        frames=[];
+    else
+        frames = unique(detRaw(:,1))';
     end
-    
+
     % 
     detOne = {};
     for t=frames

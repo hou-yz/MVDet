@@ -263,9 +263,11 @@ MODA=(1-((sum(m)+sum(fp))/sum(g)))*100;
 recall=sum(c)/sum(g)*100;
 precision=sum(c)/(sum(fp)+sum(c))*100;
 FAR=sum(fp)/Fgt;
+if isempty(FAR), FAR=0; end % force to 0
 GT=sum(g);
  
 metrics=[recall, precision, FAR, GT, truepositives, falsepositives, missed, MODA, MODP];
+metrics(isnan(metrics))=0;
 
 additionalInfo.allfalsepos=allfalsepos;
 

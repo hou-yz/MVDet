@@ -25,32 +25,33 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
     @return: MODP, MODA, recall, precision
     """
 
-    filename = res_fpath.split("/")
-    splitStrLong = ""
-    if "train" in filename[-1]:
-        splitStrLong = 'Training Set'
-        if dataset_name == "Wildtrack":
-            start = 0
-            steps = 5
-            frames = 1795
-        elif dataset_name == "MultiviewX":
-            start = 0
-            steps = 1
-            frames = 359
-
-    if "test" in filename[-1]:
-        splitStrLong = 'Testing Set'
-        if dataset_name == "Wildtrack":
-            start = 1800
-            steps = 5
-            frames = 1995
-        elif dataset_name == "MultiviewX":
-            start = 360
-            steps = 1
-            frames = 399
+    # filename = res_fpath.split("/")
+    # splitStrLong = ""
+    # if "train" in filename[-1]:
+    #     splitStrLong = 'Training Set'
+    #     if dataset_name == "Wildtrack":
+    #         start = 0
+    #         steps = 5
+    #         frames = 1795
+    #     elif dataset_name == "MultiviewX":
+    #         start = 0
+    #         steps = 1
+    #         frames = 359
+    #
+    # if "test" in filename[-1]:
+    #     splitStrLong = 'Testing Set'
+    #     if dataset_name == "Wildtrack":
+    #         start = 1800
+    #         steps = 5
+    #         frames = 1995
+    #     elif dataset_name == "MultiviewX":
+    #         start = 360
+    #         steps = 1
+    #         frames = 399
 
     gtRaw = np.loadtxt(gt_fpath)
     detRaw = np.loadtxt(res_fpath)
+    frames = np.unique(detRaw[:, 0]) if detRaw.size else np.zeros(0)
     frame_ctr = 0
     gt_flag = True
     det_flag = True
@@ -61,7 +62,7 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
         MODP, MODA, recall, precision = 0, 0, 0, 0
         return MODP, MODA, recall, precision
 
-    for t in range(start, frames + 1, steps):
+    for t in frames:
         idxs = np.where(gtRaw[:, 0] == t)
         idx = idxs[0]
         idx_len = len(idx)
@@ -91,12 +92,13 @@ def evaluateDetection_py(res_fpath, gt_fpath, dataset_name):
         else:
             detAllMatrix = np.concatenate((detAllMatrix, tmp_arr), axis=0)
         frame_ctr += 1
-    MODP, MODA, recall, precision = CLEAR_MOD_HUN(gtAllMatrix, detAllMatrix)
-    return MODP, MODA, recall, precision
+    recall, precision, MODA, MODP = CLEAR_MOD_HUN(gtAllMatrix, detAllMatrix)
+    return recall, precision, MODA, MODP
 
 
 if __name__ == "__main__":
     res_fpath = "../test-demo.txt"
-    gt_fpath = "../test-demo.txt"
+    gt_fpath = "../gt-demo.txt"
     dataset_name = "Wildtrack"
-    evaluateDetection_py(res_fpath, gt_fpath, dataset_name)
+    recall, precision, moda, modp = evaluateDetection_py(res_fpath, gt_fpath, dataset_name)
+    print(f'python eval: MODA {moda:.1f}, MODP {modp:.1f}, prec {precision:.1f}, rcll {recall:.1f}')
