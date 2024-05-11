@@ -38,7 +38,7 @@ Using pedestrian models from [PersonX](https://github.com/sxzrt/Dissecting-Perso
 MultiviewX dataset covers a square of 16 meters by 25 meters. We quantize the ground plane into a 640x1000 grid. There are 6 cameras with overlapping field-of-view in MultiviewX dataset, each of which outputs a 1080x1920 resolution image. We also generate annotations for 400 frames in MultiviewX at 2 fps (same as Wildtrack). On average, 4.41 cameras are covering the same location. 
 
 ### Download MultiviewX
-Please refer to this [link](https://1drv.ms/u/s!AtzsQybTubHf_0Em3aDtH8q7hfc-?e=B3vMww) for download.
+Please refer to this [link](https://1drv.ms/u/s!AtzsQybTubHfhYZ9Ghhahbp20OX9kA?e=Hm9Xdg) for download.
 
 ### Build your own version
 Please refer to this [repo](https://github.com/hou-yz/MultiviewX) for a detailed guide & toolkits you might need.
