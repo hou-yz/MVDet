@@ -87,7 +87,7 @@ class Wildtrack(VisionDataset):
         tvec = np.array(list(map(lambda x: float(x), tvec)), dtype=np.float32)
 
         rotation_matrix, _ = cv2.Rodrigues(rvec)
-        translation_matrix = np.array(tvec, dtype=np.float).reshape(3, 1)
+        translation_matrix = np.array(tvec, dtype=np.float32).reshape(3, 1)
         extrinsic_matrix = np.hstack((rotation_matrix, translation_matrix))
 
         return intrinsic_matrix, extrinsic_matrix
